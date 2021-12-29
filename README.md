@@ -9,5 +9,5 @@ rmtrash is a small utility that will move the file to OS X's Trash rather than o
 ### Install
 
 ```shell
-brew install --build-from-source rmtrash
+brew install --build-from-source tbxark/repo/rmtrash
 ```
