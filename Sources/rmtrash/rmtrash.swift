@@ -15,7 +15,7 @@ struct RtCommand: ParsableCommand {
         commandName: "rmtrash",
         abstract: "Move files and directories to the trash.",
         discussion: "rmtrash is a small utility that will move the file to OS X's Trash rather than obliterating the file (as rm does).",
-        version: "0.5.0",
+        version: "0.5.2",
         shouldDisplay: true,
         subcommands: [],
         helpNames: .shortAndLong
@@ -238,7 +238,6 @@ struct Trash {
                 !question("Are you sure you want to remove \(url.path)?") {
                 continue
             }
-
 
             try fileManager.trashItem(at: url)
         }
