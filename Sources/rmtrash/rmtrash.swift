@@ -15,7 +15,7 @@ struct RtCommand: ParsableCommand {
         commandName: "rmtrash",
         abstract: "Move files and directories to the trash.",
         discussion: "rmtrash is a small utility that will move the file to OS X's Trash rather than obliterating the file (as rm does).",
-        version: "0.5.0",
+        version: "0.5.1",
         shouldDisplay: true,
         subcommands: [],
         helpNames: .shortAndLong
@@ -67,7 +67,9 @@ struct RtCommand: ParsableCommand {
     
     func parseArgs() throws -> Trash.Config {
         var interactiveMode: Trash.Config.InteractiveMode = .always
-        if interactiveAlways {
+        if force {
+            interactiveMode = .never
+        } else if interactiveAlways {
             interactiveMode = .always
         } else if interactiveOnce {
             interactiveMode = .once
@@ -78,7 +80,7 @@ struct RtCommand: ParsableCommand {
                 throw RtError("rmtrash: invalid argument for --interactive: \(interactive)")
             }
         }
-        return Trash.Config(interactiveMode: interactiveMode, recursive: recursive, rmEmptyDirs: rmEmptyDirs, rmRootDir: preserveRoot, verbose: verbose)
+        return Trash.Config(interactiveMode: interactiveMode, force: force, recursive: recursive, rmEmptyDirs: rmEmptyDirs, rmRootDir: preserveRoot, verbose: verbose)
     }
 }
 
@@ -122,7 +124,7 @@ extension FileManager {
         }
         return count
     }
-  
+    
     func isGlob(_ path: String) -> Bool {
         let globCharacters = ["*", "?", "[", "]", "{", "}", "**"]
         let characters = Array(path)
@@ -170,6 +172,7 @@ struct Trash {
         }
         
         var interactiveMode: InteractiveMode
+        var force: Bool
         var recursive: Bool
         var rmEmptyDirs: Bool
         var rmRootDir: Bool
@@ -200,22 +203,36 @@ struct Trash {
             return
         }
         for url in urls {
-            if !fileManager.fileExists(atPath: url.path) && config.interactiveMode != .never {
+
+            // file exists check
+            if !fileManager.fileExists(atPath: url.path) && !config.force {
                 throw RtError("rmtrash: \(url.path): No such file or directory")
             }
+
+            // root directory check
             if fileManager.isRootDir(url) && !config.rmRootDir {
                 throw RtError("rmtrash: it is dangerous to operate recursively on '/'")
             }
+
+            // directory check
             let isDir = fileManager.isDirectory(url)
-            if !config.recursive && config.rmEmptyDirs && isDir && fileManager.isEmptyDirectory(url) {
-                throw RtError("rmtrash: directory not empty")
+            if !config.recursive && isDir { // 1. is a directory and not recursive
+                if config.rmEmptyDirs { // 1.1. can remove empty directories
+                    if !fileManager.isEmptyDirectory(url)  { // 1.1.1. is not empty
+                        throw RtError("rmtrash: directory not empty")  //
+                    }
+                } else { // 1.2. can't remove empty directories
+                    throw RtError("rmtrash: \(url.path): is a directory")
+                }
             }
-            if isDir && !config.recursive {
-                throw RtError("rmtrash: \(url.path): is a directory")
-            }
-            if config.interactiveMode == .always && !question("Are you sure you want to remove \(url.path)?") {
+
+            // interactive check
+            if config.interactiveMode == .always &&
+                !question("Are you sure you want to remove \(url.path)?") {
                 continue
             }
+
+            
             try fileManager.trashItem(at: url)
         }
     }
