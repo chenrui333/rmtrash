@@ -24,5 +24,13 @@ OPTIONS:
   -h, --help              Show help information.
 ```
 
+Also, you can add the following aliases to your shell profile:
+
+```shell
+alias del="rmtrash"
+alias trash="rmtrash"
+alias rm="echo Use 'del', or the full path i.e. '/bin/rm'"
+```
+
 ### License
 **rmtrash** is released under the MIT license. [See LICENSE](LICENSE) for details.
