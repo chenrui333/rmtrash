@@ -1,9 +1,6 @@
 ## rmtrash
 
-rmtrash is a small utility that will move the file to OS X's Trash rather than obliterating the file (as rm does).
-
-
-改自 http://www.nightproductions.net/cli.htm, 使其能够正常编译。使用`make`命令能够直接编译。
+**rmtrash** is a small utility that will move the file to OS X's Trash rather than obliterating the file (as rm does).
 
 
 ### Install
@@ -11,3 +8,20 @@ rmtrash is a small utility that will move the file to OS X's Trash rather than o
 ```shell
 brew install --build-from-source tbxark/repo/rmtrash
 ```
+
+### Usage
+
+```
+USAGE: trash-command [--recursive] [--force] <paths> ...
+
+ARGUMENTS:
+  <paths>                 The files or directories to move to trash.
+
+OPTIONS:
+  -r, --recursive         Recursively remove directories and their contents.
+  -f, --force             Ignore nonexistent files and arguments, never prompt.
+  -h, --help              Show help information.
+```
+
+### License
+**rmtrash** is released under the MIT license. [See LICENSE](LICENSE) for details.
