@@ -12,7 +12,7 @@ brew install --build-from-source tbxark/repo/rmtrash
 ### Usage
 
 ```
-USAGE: trash-command [--recursive] [--force] <paths> ...
+USAGE: rmtrash [--recursive] [--force] [--verbose] <paths> ...
 
 ARGUMENTS:
   <paths>                 The files or directories to move to trash.
@@ -20,6 +20,7 @@ ARGUMENTS:
 OPTIONS:
   -r, --recursive         Recursively remove directories and their contents.
   -f, --force             Ignore nonexistent files and arguments, never prompt.
+  -v, --verbose           Print debugging information.
   -h, --help              Show help information.
 ```
 
