@@ -8,12 +8,15 @@ struct StandardError: TextOutputStream {
     }
 }
 
-struct TrashCommand: ParsableCommand {
+struct Rmtrash: ParsableCommand {
     @Flag(name: .shortAndLong, help: "Recursively remove directories and their contents.")
     var recursive: Bool = false
 
     @Flag(name: .shortAndLong, help: "Ignore nonexistent files and arguments, never prompt.")
     var force: Bool = false
+
+    @Flag(name: .shortAndLong, help: "Print debugging information.")
+    var verbose: Bool = false
 
     @Argument(help: "The files or directories to move to trash.")
     var paths: [String]
@@ -46,7 +49,9 @@ struct TrashCommand: ParsableCommand {
                 var resultingItemURL: NSURL?
                 try fileManager.trashItem(at: fileURL, resultingItemURL: &resultingItemURL)
                 if let trashedURL = resultingItemURL {
-                    print("File moved to trash: \(trashedURL.path ?? "")", to: &standardError)
+                    if verbose {
+                        print("Moved to trash: \(trashedURL.path ?? "")")
+                    }
                 }
             } catch {
                 print("Failed to move file to trash: \(error.localizedDescription)", to: &standardError)
@@ -55,4 +60,4 @@ struct TrashCommand: ParsableCommand {
     }
 }
 
-TrashCommand.main()
+Rmtrash.main()
