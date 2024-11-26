@@ -29,3 +29,7 @@ release: build
 	tar -czf .dist/$(bin)_$(version)_x86_64.tar.gz .build/x86_64-apple-macosx/release/$(bin)
 	tar -czf .dist/$(bin)_$(version)_arm64.tar.gz .build/arm64-apple-macosx/release/$(bin)
 	tar -czf .dist/$(bin)_$(version)_universal.tar.gz .build/release/$(bin)
+
+.PHONY: clean
+clean:
+	rm -rf .build .dist
