@@ -15,7 +15,7 @@ struct RtCommand: ParsableCommand {
         commandName: "rmtrash",
         abstract: "Move files and directories to the trash.",
         discussion: "rmtrash is a small utility that will move the file to OS X's Trash rather than obliterating the file (as rm does).",
-        version: "0.5.1",
+        version: "0.5.0",
         shouldDisplay: true,
         subcommands: [],
         helpNames: .shortAndLong
@@ -31,10 +31,10 @@ struct RtCommand: ParsableCommand {
     var interactiveOnce: Bool = false
     
     @Option(name: .customLong("interactive"), help: "Prompt according to WHEN: never, once (-I), or always (-i). If WHEN is not specified, then prompt always.")
-    var interactive: String? = nil
+    var interactive: String?
     
     @Flag(name: .customLong("preserve-root"), inversion: .prefixedNo, help: "Do not remove \"/\" (the root directory), which is the default behavior.")
-    var preserveRoot: Bool = false
+    var preserveRoot: Bool = true
     
     @Flag(name: .shortAndLong, help: "Recursively remove directories and their contents.")
     var recursive: Bool = false
@@ -80,7 +80,14 @@ struct RtCommand: ParsableCommand {
                 throw RtError("rmtrash: invalid argument for --interactive: \(interactive)")
             }
         }
-        return Trash.Config(interactiveMode: interactiveMode, force: force, recursive: recursive, rmEmptyDirs: rmEmptyDirs, rmRootDir: preserveRoot, verbose: verbose)
+        return Trash.Config(
+            interactiveMode: interactiveMode,
+            force: force,
+            recursive: recursive,
+            rmEmptyDirs: rmEmptyDirs,
+            rmRootDir: !preserveRoot,
+            verbose: verbose
+            )
     }
 }
 
@@ -108,7 +115,7 @@ extension FileManager {
         return url.standardizedFileURL.path == "/"
     }
     
-    func fileCount(_ url: URL) ->  Int {
+    func fileCount(_ url: URL) -> Int {
         var count = 0
         if let enumerator = enumerator(at: url,
                                        includingPropertiesForKeys: [.isRegularFileKey],
@@ -218,7 +225,7 @@ struct Trash {
             let isDir = fileManager.isDirectory(url)
             if !config.recursive && isDir { // 1. is a directory and not recursive
                 if config.rmEmptyDirs { // 1.1. can remove empty directories
-                    if !fileManager.isEmptyDirectory(url)  { // 1.1.1. is not empty
+                    if !fileManager.isEmptyDirectory(url) { // 1.1.1. is not empty
                         throw RtError("rmtrash: directory not empty")  //
                     }
                 } else { // 1.2. can't remove empty directories
@@ -232,10 +239,8 @@ struct Trash {
                 continue
             }
 
-            
+
             try fileManager.trashItem(at: url)
         }
     }
 }
-
-
