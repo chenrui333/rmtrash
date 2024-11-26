@@ -42,7 +42,7 @@ rmtrash --version
 
 If the **-I**/**--interactive=once** option is given, and there are more than three files or the **-r**/**-R**/**--recursive** options are specified, **rm** prompts before deleting anything. If the user does not respond **yes**/**y**/**Y** to the prompt, the entire command is aborted.
 
-If a file is unwritable, [stdin](https://www.computerhope.com/jargon/s/stdin.htm) is a [terminal](https://www.computerhope.com/jargon/t/terminal.htm), and the **-f**/**--force** option is not given, or the **-i** or **--interactive=always** option is given, **rm** prompts the user for whether to remove the file. If the response is not **yes**/**y**/**Y**, the file is skipped.
+If a file is unwritable, stdin is a terminal, and the **-f**/**--force** option is not given, or the **-i** or **--interactive=always** option is given, **rm** prompts the user for whether to remove the file. If the response is not **yes**/**y**/**Y**, the file is skipped.
 
 Also, you can add the following aliases to your shell profile:
 
