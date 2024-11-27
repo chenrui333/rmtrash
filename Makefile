@@ -1,5 +1,5 @@
 bin = rmtrash
-install_dir = /usr/local/bin
+install_dir = /opt/homebrew/bin
 version = $(shell git describe --tags --abbrev=0)
 
 .PHONY: deps

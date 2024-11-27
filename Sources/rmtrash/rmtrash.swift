@@ -96,10 +96,9 @@ extension FileManager {
         try trashItem(at: url, resultingItemURL: nil)
     }
     
-    func isDirectory(_ url: URL) -> Bool {
-        var isDirectory: ObjCBool = false
-        fileExists(atPath: url.path, isDirectory: &isDirectory)
-        return isDirectory.boolValue
+    func isDirectory(_ url: URL) throws -> Bool {
+        let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey])
+        return resourceValues.isDirectory == true
     }
     
     func isEmptyDirectory(_ url: URL) -> Bool {
@@ -116,29 +115,35 @@ extension FileManager {
         return url.standardizedFileURL.path == "/"
     }
     
-    func checkFileCount(_ urls: [URL], greaterThan value: Int) -> Bool {
+    func checkFileCount(_ urls: [URL], greaterThan value: Int) throws -> Bool {
         var count = 0
         for url in urls {
-            if count > value {
-                return true
-            }
-            if !isDirectory(url) {
+            let isDir = try isDirectory(url)
+            if !isDir {
                 count += 1
+                if count > value {
+                    return true
+                }
             } else {
                 guard let enumerator = enumerator(at: url, includingPropertiesForKeys: nil, options: []) else {
                     continue
                 }
                 for case let fileURL as URL in enumerator {
-                    if !isDirectory(fileURL) {
-                        count += 1
+                    if let resourceValues = try? fileURL.resourceValues(forKeys: [.isDirectoryKey]) {
+                        if resourceValues.isDirectory == false {
+                            count += 1
+                            if count > value {
+                                return true
+                            }
+                        }
                     }
                 }
             }
         }
         return false
     }
-
-    func isCorssMountPoint(_ url: URL) throws -> Bool {
+    
+    func isCrossMountPoint(_ url: URL) throws -> Bool {
         let cur = URL(fileURLWithPath: currentDirectoryPath)
         let curVol = try cur.resourceValues(forKeys: [URLResourceKey.volumeURLKey])
         let urlVol = try url.resourceValues(forKeys: [URLResourceKey.volumeURLKey])
@@ -226,12 +231,13 @@ struct Trash {
         
         let urls = paths.map({ URL(fileURLWithPath: $0).standardizedFileURL })
         
-        if config.interactiveMode == .once &&
-            fileManager.checkFileCount(urls, greaterThan: 3) &&
-            !question("remove multiple files?") {
-            return
+        if config.interactiveMode == .once {
+            let count = try fileManager.checkFileCount(urls, greaterThan: 3)
+            if count && !question("remove multiple files?") {
+                return
+            }
         }
-
+        
         for url in urls {
             
             // file exists check
@@ -248,7 +254,7 @@ struct Trash {
             }
             
             // directory check
-            let isDir = fileManager.isDirectory(url)
+            let isDir = try fileManager.isDirectory(url)
             if !config.recursive && isDir {             // 1. is a directory and not recursive
                 if config.emptyDirs {                   // 1.1. can remove empty directories
                     if !fileManager.isEmptyDirectory(url) { // 1.1.1. is not empty
@@ -268,12 +274,12 @@ struct Trash {
             
             // cross mount point check
             if config.oneFileSystem  {
-                let cross = try fileManager.isCorssMountPoint(url)
+                let cross = try fileManager.isCrossMountPoint(url)
                 if cross {
                     throw Panic("rmtrash: \(url.path): cross-device link")
                 }
             }
-
+            
             Logger.verbose("rmtrash: \(url.path)")
             try fileManager.trashItem(at: url)
         }
