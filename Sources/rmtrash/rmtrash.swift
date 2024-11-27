@@ -56,7 +56,7 @@ struct Command: ParsableCommand {
             let args = try parseArgs()
             Logger.level = args.verbose ? .verbose : .error
             Logger.verbose("Arguments: \(args)")
-            try  Trash(config: args).remove(paths: paths)
+            try Trash(config: args).remove(paths: paths)
         } catch let error as Panic {
             Logger.panic(error.message)
         } catch {
@@ -116,24 +116,22 @@ extension FileManager {
         return url.standardizedFileURL.path == "/"
     }
     
-    func checkFileCount(_ url: [URL], greaterThen value: Int) -> Bool {
+    func checkFileCount(_ urls: [URL], greaterThan value: Int) -> Bool {
         var count = 0
-        for url in url {
-            if !isDirectory(url) {
-                count += 1
-            }
+        for url in urls {
             if count > value {
                 return true
             }
-            guard let enumerator = enumerator(at: url, includingPropertiesForKeys: nil,  options: []) else {
-                continue
-            }
-            for case let fileURL as URL in enumerator {
-                if !isDirectory(fileURL) {
-                    count += 1
+            if !isDirectory(url) {
+                count += 1
+            } else {
+                guard let enumerator = enumerator(at: url, includingPropertiesForKeys: nil, options: []) else {
+                    continue
                 }
-                if count > value {
-                    return true
+                for case let fileURL as URL in enumerator {
+                    if !isDirectory(fileURL) {
+                        count += 1
+                    }
                 }
             }
         }
@@ -221,7 +219,6 @@ struct Trash {
         return answer?.lowercased() == "y" || answer?.lowercased() == "yes"
     }
     
-    
     func remove(paths: [String]) throws {
         if paths.isEmpty {
             throw Panic("rmtrash: missing operand")
@@ -230,7 +227,7 @@ struct Trash {
         let urls = paths.map({ URL(fileURLWithPath: $0).standardizedFileURL })
         
         if config.interactiveMode == .once &&
-            fileManager.checkFileCount(urls, greaterThen: 3) &&
+            fileManager.checkFileCount(urls, greaterThan: 3) &&
             !question("remove multiple files?") {
             return
         }
