@@ -11,7 +11,7 @@ struct Command: ParsableCommand {
         version: "0.6.0",
         shouldDisplay: true,
         subcommands: [],
-        helpNames: .shortAndLong
+        helpNames: .long
     )
     
     @Flag(name: .shortAndLong, help: "Ignore nonexistant files, and never prompt before removing.")
@@ -38,31 +38,26 @@ struct Command: ParsableCommand {
     @Flag(name: .shortAndLong, help: "Verbose mode; explain at all times what is being done.")
     var verbose: Bool = false
     
-    @Flag(name: .long, help: "Display a help message, and exit.")
-    var help: Bool = false
-    
     @Flag(name: .long, help: "Display version information, and exit.")
     var version: Bool = false
     
     @Argument(help: "The files or directories to move to trash.")
     var paths: [String]
-
+    
     func run() throws {
-        if help {
-            print(Command.helpMessage())
-        } else if version {
+        if version {
             print("rmtrash version \(Command.configuration.version)")
-        } else {
-            do {
-                let args = try parseArgs()
-                Logger.level = args.verbose ? .verbose : .error
-                Logger.verbose("Arguments: \(args)")
-                try  Trash(config: args).remove(paths: paths)
-            } catch let error as Panic {
-                Logger.panic(error.message)
-            } catch {
-                Logger.panic("rmtrash: \(error)")
-            }
+            Command.exit()
+        }
+        do {
+            let args = try parseArgs()
+            Logger.level = args.verbose ? .verbose : .error
+            Logger.verbose("Arguments: \(args)")
+            try  Trash(config: args).remove(paths: paths)
+        } catch let error as Panic {
+            Logger.panic(error.message)
+        } catch {
+            Logger.panic("rmtrash: \(error)")
         }
     }
     
