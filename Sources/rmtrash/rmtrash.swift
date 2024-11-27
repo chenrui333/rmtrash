@@ -26,10 +26,13 @@ struct Command: ParsableCommand {
     @Option(name: .customLong("interactive"), help: "Prompt according to WHEN: never, once (-I), or always (-i). If WHEN is not specified, then prompt always.")
     var interactive: String?
     
+    @Flag(name: [.customLong("one-file-system"), .customShort("x")], help: "When removing a hierarchy recursively, skip any directory that is on a file system different from that of the corresponding command line argument ")
+    var oneFileSystem: Bool = false
+    
     @Flag(name: .customLong("preserve-root"), inversion: .prefixedNo, help: "Do not remove \"/\" (the root directory), which is the default behavior.")
     var preserveRoot: Bool = true
     
-    @Flag(name: .shortAndLong, help: "Recursively remove directories and their contents.")
+    @Flag(name: [.short, .long, .customShort("R")], help: "Recursively remove directories and their contents.")
     var recursive: Bool = false
     
     @Flag(name: [.customShort("d"), .customLong("dir")], help: "Remove empty directories. This option permits you to remove a directory without specifying -r/-R/--recursive, provided that the directory is empty. In other words, rm -d is equivalent to using rmdir.")
@@ -82,6 +85,7 @@ struct Command: ParsableCommand {
             recursive: recursive,
             emptyDirs: emptyDirs,
             preserveRoot: preserveRoot,
+            oneFileSystem: oneFileSystem,
             verbose: verbose
         )
     }
@@ -134,6 +138,13 @@ extension FileManager {
             }
         }
         return false
+    }
+
+    func isCorssMountPoint(_ url: URL) throws -> Bool {
+        let cur = URL(fileURLWithPath: currentDirectoryPath)
+        let curVol = try cur.resourceValues(forKeys: [URLResourceKey.volumeURLKey])
+        let urlVol = try url.resourceValues(forKeys: [URLResourceKey.volumeURLKey])
+        return curVol.volume != urlVol.volume
     }
     
 }
@@ -193,6 +204,7 @@ struct Trash {
         var recursive: Bool
         var emptyDirs: Bool
         var preserveRoot: Bool
+        var oneFileSystem: Bool
         var verbose: Bool
     }
     
@@ -251,6 +263,13 @@ struct Trash {
                 continue
             }
             
+            // cross mount point check
+            if config.oneFileSystem  {
+                let cross = try fileManager.isCorssMountPoint(url)
+                if cross {
+                    throw Panic("rmtrash: \(url.path): cross-device link")
+                }
+            }
             Logger.verbose("rmtrash: \(url.path)")
             try fileManager.trashItem(at: url)
         }

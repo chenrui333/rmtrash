@@ -30,7 +30,7 @@ rmtrash --version
 | **-I**                          | Prompt once before removing more than three files, or when removing recursively. This option is less intrusive than **-i**, but still gives protection against most mistakes. |
 | **--interactive**[**=***WHEN*]  | Prompt according to *WHEN*: **never**, **once** (**-I**), or **always** (**-i**). If *WHEN* is not specified, then prompt once. |
 | **--one-file-system**           | When removing a hierarchy recursively, skip any directory that is on a file system different from that of the corresponding command line argument |
-| **--no-preserve-root**          | Do not treat "**/**" (the root directory) in any special way. |
+| **--no-preserve-root**, **-x**  | Do not treat "**/**" (the root directory) in any special way. |
 | **--preserve-root**             | Do not remove "**/**" (the root directory), which is the default behavior. |
 | **-r**, **-R**, **--recursive** | Remove directories and their contents recursively.           |
 | **-d**, **--dir**               | Remove empty directories. This option permits you to remove a directory without specifying **-r**/**-R**/**--recursive**, provided that the directory is empty. In other words, **rmtrash -d** is equivalent to using **rmdir**. |
