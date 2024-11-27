@@ -7,8 +7,8 @@ struct Command: ParsableCommand {
     static var configuration: CommandConfiguration = CommandConfiguration(
         commandName: "rmtrash",
         abstract: "Move files and directories to the trash.",
-        discussion: "rmtrash is a small utility that will move the file to OS X's Trash rather than obliterating the file (as rm does).",
-        version: "0.6.0",
+        discussion: "rmtrash is a small utility that will move the file to macOS's Trash rather than obliterating the file (as rm does).",
+        version: "0.6.1",
         shouldDisplay: true,
         subcommands: [],
         helpNames: .long
@@ -226,17 +226,23 @@ struct Trash {
         if paths.isEmpty {
             throw Panic("rmtrash: missing operand")
         }
+        
         let urls = paths.map({ URL(fileURLWithPath: $0).standardizedFileURL })
+        
         if config.interactiveMode == .once &&
             fileManager.checkFileCount(urls, greaterThen: 3) &&
             !question("remove multiple files?") {
             return
         }
+
         for url in urls {
             
             // file exists check
-            if !fileManager.fileExists(atPath: url.path) && !config.force {
-                throw Panic("rmtrash: \(url.path): No such file or directory")
+            if !fileManager.fileExists(atPath: url.path) {
+                if !config.force {
+                    throw Panic("rmtrash: \(url.path): No such file or directory")
+                }
+                continue
             }
             
             // root directory check
@@ -270,6 +276,7 @@ struct Trash {
                     throw Panic("rmtrash: \(url.path): cross-device link")
                 }
             }
+
             Logger.verbose("rmtrash: \(url.path)")
             try fileManager.trashItem(at: url)
         }
