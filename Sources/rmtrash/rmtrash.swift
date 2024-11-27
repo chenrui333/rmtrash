@@ -8,7 +8,7 @@ struct Command: ParsableCommand {
         commandName: "rmtrash",
         abstract: "Move files and directories to the trash.",
         discussion: "rmtrash is a small utility that will move the file to macOS's Trash rather than obliterating the file (as rm does).",
-        version: "0.6.1",
+        version: "0.6.2",
         shouldDisplay: true,
         subcommands: [],
         helpNames: .long
@@ -93,6 +93,7 @@ struct Command: ParsableCommand {
 
 extension FileManager {
     func trashItem(at url: URL) throws {
+        Logger.verbose("rmtrash: \(url.path)")
         try trashItem(at: url, resultingItemURL: nil)
     }
     
@@ -113,34 +114,6 @@ extension FileManager {
     
     func isRootDir(_ url: URL) -> Bool {
         return url.standardizedFileURL.path == "/"
-    }
-    
-    func checkFileCount(_ urls: [URL], greaterThan value: Int) throws -> Bool {
-        var count = 0
-        for url in urls {
-            let isDir = try isDirectory(url)
-            if !isDir {
-                count += 1
-                if count > value {
-                    return true
-                }
-            } else {
-                guard let enumerator = enumerator(at: url, includingPropertiesForKeys: nil, options: []) else {
-                    continue
-                }
-                for case let fileURL as URL in enumerator {
-                    if let resourceValues = try? fileURL.resourceValues(forKeys: [.isDirectoryKey]) {
-                        if resourceValues.isDirectory == false {
-                            count += 1
-                            if count > value {
-                                return true
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return false
     }
     
     func isCrossMountPoint(_ url: URL) throws -> Bool {
@@ -218,57 +191,68 @@ struct Trash {
         self.config = config
     }
     
-    func question(_ message: String) -> Bool {
+    private func question(_ message: String) -> Bool {
         print("\(message) (y/n) ", terminator: "")
         let answer = readLine()
         return answer?.lowercased() == "y" || answer?.lowercased() == "yes"
     }
+   
     
     func remove(paths: [String]) throws {
         if paths.isEmpty {
             throw Panic("rmtrash: missing operand")
         }
         
-        let urls = paths.map({ URL(fileURLWithPath: $0).standardizedFileURL })
+        let urls = paths.map({ URL(fileURLWithPath: $0) })
+        let isDirs = try preCheck(urls: urls)
         
         if config.interactiveMode == .once {
-            let count = try fileManager.checkFileCount(urls, greaterThan: 3)
-            if count && !question("remove multiple files?") {
+            let dirs = isDirs.filter({ $0.value }).keys.map({ $0.path })
+            let fileCount = isDirs.filter({ $0.value == false }).count
+            switch (dirs.count > 0, fileCount > 0) {
+            case (true, false):
+                if !question("recursively remove \(dirs.joined(separator: " "))?") {
+                    return
+                }
+            case (false, true):
+                if fileCount > 3 && !question("remove \(fileCount) files?") {
+                    return
+                }
+            case (true, true):
+                if !question("recursively remove \(dirs.joined(separator: " ")) and \(fileCount) files?") {
+                    return
+                }
+            case (false, false):
                 return
             }
         }
         
         for url in urls {
-            
+            guard let isDir = isDirs[url] else {
+                return
+            }
+            switch (config.interactiveMode, isDir) {
+            case (.always, true):
+                try examineDirectory(url)
+            case (.always, false):
+                if question("remove \(url.path)?")  {
+                    try fileManager.trashItem(at: url)
+                }
+            case (.never, _), (.once, _):
+                try fileManager.trashItem(at: url)
+            }
+        }
+    }
+    
+    private func preCheck(urls: [URL]) throws -> [URL: Bool] {
+        var isDirs = [URL: Bool]()
+        
+        for url in urls {
             // file exists check
             if !fileManager.fileExists(atPath: url.path) {
                 if !config.force {
                     throw Panic("rmtrash: \(url.path): No such file or directory")
                 }
-                continue
-            }
-            
-            // root directory check
-            if fileManager.isRootDir(url) && config.preserveRoot {
-                throw Panic("rmtrash: it is dangerous to operate recursively on '/'")
-            }
-            
-            // directory check
-            let isDir = try fileManager.isDirectory(url)
-            if !config.recursive && isDir {             // 1. is a directory and not recursive
-                if config.emptyDirs {                   // 1.1. can remove empty directories
-                    if !fileManager.isEmptyDirectory(url) { // 1.1.1. is not empty
-                        throw Panic("rmtrash: \(url.path): Directory not empty")
-                    }
-                } else { // 1.2. can't remove empty directories
-                    throw Panic("rmtrash: \(url.path): is a directory")
-                    
-                }
-            }
-            
-            // interactive check
-            if config.interactiveMode == .always &&
-                !question("remove \(url.path)?") {
                 continue
             }
             
@@ -280,7 +264,52 @@ struct Trash {
                 }
             }
             
-            Logger.verbose("rmtrash: \(url.path)")
+            // directory check
+            let isDir = try fileManager.isDirectory(url)
+            isDirs[url] = isDir
+            
+            if isDir {
+                // root directory check
+                if fileManager.isRootDir(url) && config.preserveRoot {
+                    throw Panic("rmtrash: it is dangerous to operate recursively on '/'")
+                }
+                
+                // recursive check
+                if !config.recursive {  // 1. is a directory and not recursive
+                    if config.emptyDirs { // 1.1. can remove empty directories
+                        if !fileManager.isEmptyDirectory(url) { // 1.1.1. can't remove non-empty directories
+                            throw Panic("rmtrash: \(url.path): Directory not empty")
+                        }
+                    } else {  // 2. can't remove directories
+                        throw Panic("rmtrash: \(url.path): is a directory")
+                        
+                    }
+                }
+            }
+        }
+        return isDirs
+    }
+    
+    private func examineDirectory(_ url: URL) throws {
+        guard question("examine files in directory: \(url.path)?") else {
+            return
+        }
+        guard let fileEnumerator = fileManager.enumerator(at: url, includingPropertiesForKeys: nil, options: [.skipsSubdirectoryDescendants]) else {
+            return
+        }
+        for case let fileURL as URL in fileEnumerator {
+            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isDirectoryKey]) else {
+                continue
+            }
+            if resourceValues.isDirectory == false {
+                if question("remove \(fileURL.path)?") {
+                    try fileManager.trashItem(at: fileURL)
+                }
+            } else {
+                try examineDirectory(fileURL)
+            }
+        }
+        if fileManager.isEmptyDirectory(url) {
             try fileManager.trashItem(at: url)
         }
     }
