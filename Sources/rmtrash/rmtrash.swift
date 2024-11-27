@@ -1,21 +1,14 @@
 import Foundation
 import ArgumentParser
 
-struct RtError: Error {
-    let message: String
-    init(_ message: String) {
-        self.message = message
-    }
-}
-
 @main
-struct RtCommand: ParsableCommand {
+struct Command: ParsableCommand {
     
     static var configuration: CommandConfiguration = CommandConfiguration(
         commandName: "rmtrash",
         abstract: "Move files and directories to the trash.",
         discussion: "rmtrash is a small utility that will move the file to OS X's Trash rather than obliterating the file (as rm does).",
-        version: "0.5.2",
+        version: "0.6.0",
         shouldDisplay: true,
         subcommands: [],
         helpNames: .shortAndLong
@@ -40,7 +33,7 @@ struct RtCommand: ParsableCommand {
     var recursive: Bool = false
     
     @Flag(name: [.customShort("d"), .customLong("dir")], help: "Remove empty directories. This option permits you to remove a directory without specifying -r/-R/--recursive, provided that the directory is empty. In other words, rm -d is equivalent to using rmdir.")
-    var rmEmptyDirs: Bool = false
+    var emptyDirs: Bool = false
     
     @Flag(name: .shortAndLong, help: "Verbose mode; explain at all times what is being done.")
     var verbose: Bool = false
@@ -53,20 +46,28 @@ struct RtCommand: ParsableCommand {
     
     @Argument(help: "The files or directories to move to trash.")
     var paths: [String]
-    
+
     func run() throws {
         if help {
-            print(RtCommand.helpMessage())
+            print(Command.helpMessage())
         } else if version {
-            print("rmtrash version \(RtCommand.configuration.version)")
+            print("rmtrash version \(Command.configuration.version)")
         } else {
-            let args = try parseArgs()
-            try Trash(config: args).remove(paths: paths)
+            do {
+                let args = try parseArgs()
+                Logger.level = args.verbose ? .verbose : .error
+                Logger.verbose("Arguments: \(args)")
+                try  Trash(config: args).remove(paths: paths)
+            } catch let error as Panic {
+                Logger.panic(error.message)
+            } catch {
+                Logger.panic("rmtrash: \(error)")
+            }
         }
     }
     
     func parseArgs() throws -> Trash.Config {
-        var interactiveMode: Trash.Config.InteractiveMode = .always
+        var interactiveMode: Trash.Config.InteractiveMode = .once
         if force {
             interactiveMode = .never
         } else if interactiveAlways {
@@ -77,17 +78,17 @@ struct RtCommand: ParsableCommand {
             if let mode = Trash.Config.InteractiveMode(rawValue: interactive) {
                 interactiveMode = mode
             } else {
-                throw RtError("rmtrash: invalid argument for --interactive: \(interactive)")
+                throw Panic("rmtrash: invalid argument for --interactive: \(interactive)")
             }
         }
         return Trash.Config(
             interactiveMode: interactiveMode,
             force: force,
             recursive: recursive,
-            rmEmptyDirs: rmEmptyDirs,
-            rmRootDir: !preserveRoot,
+            emptyDirs: emptyDirs,
+            preserveRoot: preserveRoot,
             verbose: verbose
-            )
+        )
     }
 }
 
@@ -103,70 +104,84 @@ extension FileManager {
     }
     
     func isEmptyDirectory(_ url: URL) -> Bool {
-        guard let enumerator = enumerator(at: url,
-                                          includingPropertiesForKeys: nil,
-                                          options: [.skipsHiddenFiles]) else {
+        guard let enumerator = enumerator(at: url, includingPropertiesForKeys: nil,  options: []) else {
             return true
         }
-        return enumerator.allObjects.isEmpty
+        for _ in enumerator {
+            return false
+        }
+        return true
     }
     
     func isRootDir(_ url: URL) -> Bool {
         return url.standardizedFileURL.path == "/"
     }
     
-    func fileCount(_ url: URL) -> Int {
+    func checkFileCount(_ url: [URL], greaterThen value: Int) -> Bool {
         var count = 0
-        if let enumerator = enumerator(at: url,
-                                       includingPropertiesForKeys: [.isRegularFileKey],
-                                       options: [.skipsHiddenFiles]) {
-            for case let fileURL as URL in enumerator {
-                guard let fileAttributes = try? fileURL.resourceValues(forKeys: [.isRegularFileKey]) else {
-                    continue
-                }
-                if fileAttributes.isRegularFile! {
-                    count += 1
-                }
+        for url in url {
+            if !isDirectory(url) {
+                count += 1
             }
-        }
-        return count
-    }
-    
-    func isGlob(_ path: String) -> Bool {
-        let globCharacters = ["*", "?", "[", "]", "{", "}", "**"]
-        let characters = Array(path)
-        var i = 0
-        while i < characters.count {
-            if characters[i] == "\\" && i + 1 < characters.count {
-                i += 2
-                continue
-            }
-            let currentChar = String(characters[i])
-            if globCharacters.contains(currentChar) {
+            if count > value {
                 return true
             }
-            i += 1
+            guard let enumerator = enumerator(at: url, includingPropertiesForKeys: nil,  options: []) else {
+                continue
+            }
+            for case let fileURL as URL in enumerator {
+                if !isDirectory(fileURL) {
+                    count += 1
+                }
+                if count > value {
+                    return true
+                }
+            }
         }
         return false
     }
     
+}
+
+struct Logger {
+    enum Level: Int {
+        case verbose = 0
+        case error = 1
+        case panic = 2
+    }
     
-    func normalizePath(_ path: String) -> [URL] {
-        if isGlob(path) {
-            var urls = [URL]()
-            if let enumerator = enumerator(at: URL(fileURLWithPath: "."), includingPropertiesForKeys: nil, options: []) {
-                for case let fileURL as URL in enumerator {
-                    if fnmatch(path, fileURL.path, 0) == 0 {
-                        urls.append(fileURL.standardizedFileURL)
-                    }
-                }
-            }
-            return urls
-        } else {
-            return [URL(fileURLWithPath: path).standardizedFileURL]
+    static var level: Level = .error
+    
+    struct StdError: TextOutputStream {
+        mutating func write(_ string: String) {
+            fputs(string, stderr)
         }
     }
     
+    static func verbose(_ message: String) {
+        guard level.rawValue <= Level.verbose.rawValue else { return }
+        print(message)
+    }
+    
+    static func error(_ message: String) {
+        guard level.rawValue <= Level.error.rawValue else { return }
+        var stdError = StdError()
+        print(message, to: &stdError)
+    }
+    
+    static func panic(_ message: String) {
+        var stdError = StdError()
+        print(message, to: &stdError)
+        exit(1)
+    }
+}
+
+struct Panic: Error {
+    let message: String
+    var localizedDescription: String { message }
+    init(_ message: String) {
+        self.message = message
+    }
 }
 
 struct Trash {
@@ -181,8 +196,8 @@ struct Trash {
         var interactiveMode: InteractiveMode
         var force: Bool
         var recursive: Bool
-        var rmEmptyDirs: Bool
-        var rmRootDir: Bool
+        var emptyDirs: Bool
+        var preserveRoot: Bool
         var verbose: Bool
     }
     
@@ -201,44 +216,47 @@ struct Trash {
     
     
     func remove(paths: [String]) throws {
-        let urls = paths.flatMap(fileManager.normalizePath)
-        if urls.isEmpty {
-            throw RtError("rmtrash: missing operand")
+        if paths.isEmpty {
+            throw Panic("rmtrash: missing operand")
         }
+        let urls = paths.map({ URL(fileURLWithPath: $0).standardizedFileURL })
         if config.interactiveMode == .once &&
-            !question("Are you sure you want to move \(urls.count) path\(urls.count > 1 ? "s" : "") to trash?") {
+            fileManager.checkFileCount(urls, greaterThen: 3) &&
+            !question("remove multiple files?") {
             return
         }
         for url in urls {
-
+            
             // file exists check
             if !fileManager.fileExists(atPath: url.path) && !config.force {
-                throw RtError("rmtrash: \(url.path): No such file or directory")
+                throw Panic("rmtrash: \(url.path): No such file or directory")
             }
-
+            
             // root directory check
-            if fileManager.isRootDir(url) && !config.rmRootDir {
-                throw RtError("rmtrash: it is dangerous to operate recursively on '/'")
+            if fileManager.isRootDir(url) && config.preserveRoot {
+                throw Panic("rmtrash: it is dangerous to operate recursively on '/'")
             }
-
+            
             // directory check
             let isDir = fileManager.isDirectory(url)
-            if !config.recursive && isDir { // 1. is a directory and not recursive
-                if config.rmEmptyDirs { // 1.1. can remove empty directories
+            if !config.recursive && isDir {             // 1. is a directory and not recursive
+                if config.emptyDirs {                   // 1.1. can remove empty directories
                     if !fileManager.isEmptyDirectory(url) { // 1.1.1. is not empty
-                        throw RtError("rmtrash: directory not empty")  //
+                        throw Panic("rmtrash: \(url.path): Directory not empty")
                     }
                 } else { // 1.2. can't remove empty directories
-                    throw RtError("rmtrash: \(url.path): is a directory")
+                    throw Panic("rmtrash: \(url.path): is a directory")
+                    
                 }
             }
-
+            
             // interactive check
             if config.interactiveMode == .always &&
-                !question("Are you sure you want to remove \(url.path)?") {
+                !question("remove \(url.path)?") {
                 continue
             }
-
+            
+            Logger.verbose("rmtrash: \(url.path)")
             try fileManager.trashItem(at: url)
         }
     }

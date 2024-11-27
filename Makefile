@@ -30,6 +30,10 @@ release: build
 	tar -czf .dist/$(bin)_$(version)_arm64.tar.gz .build/arm64-apple-macosx/release/$(bin)
 	tar -czf .dist/$(bin)_$(version)_universal.tar.gz .build/release/$(bin)
 
+.PHONY: install
+install: build
+	mv .build/release/rmtrash /opt/homebrew/bin/rmtrash
+
 .PHONY: clean
 clean:
 	rm -rf .build .dist
