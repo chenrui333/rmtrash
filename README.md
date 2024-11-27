@@ -1,19 +1,19 @@
 ## rmtrash
 
-**rmtrash** is a small utility that will move the file to OS X's Trash rather than obliterating the file (as rm does).
+**rmtrash** is a small utility that will move the file to macOS's Trash rather than obliterating the file (as rm does).
 
 
 ### Install
 
 ```shell
-brew install --build-from-source tbxark/repo/rmtrash
+brew install tbxark/repo/rmtrash
 ```
 
 ### Syntax
 
 ```
 rmtrash [-f | --force] {[-i | --interactive[=always]] | [-I | --interactive=once] |
-   [--interactive=never]} [--one-file-system] [--no-preserve-root |
+   [--interactive=never]} [--one-file-system | -x] [--no-preserve-root |
    --preserve-root] [-r | -R | --recursive] [-d | --dir] [-v | --verbose] 
    FILE...
 
