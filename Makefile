@@ -1,4 +1,5 @@
-bin = $(shell basename $(CURDIR))
+bin = rmtrash
+install_dir = /usr/local/bin
 version = $(shell git describe --tags --abbrev=0)
 
 .PHONY: deps
@@ -26,13 +27,14 @@ build-universal:
 .PHONY: release
 release: build
 	mkdir -p .dist
-	tar -czf .dist/$(bin)_$(version)_x86_64.tar.gz .build/x86_64-apple-macosx/release/$(bin)
-	tar -czf .dist/$(bin)_$(version)_arm64.tar.gz .build/arm64-apple-macosx/release/$(bin)
-	tar -czf .dist/$(bin)_$(version)_universal.tar.gz .build/release/$(bin)
+	tar -czf .dist/$(bin)_$(version)_x86_64.tar.gz -C .build/x86_64-apple-macosx/release $(bin)
+	tar -czf .dist/$(bin)_$(version)_arm64.tar.gz -C .build/arm64-apple-macosx/release $(bin)
+	tar -czf .dist/$(bin)_$(version)_universal.tar.gz -C .build/release $(bin)
 
 .PHONY: install
 install: build
-	mv .build/release/rmtrash /opt/homebrew/bin/rmtrash
+	mv .build/release/$(bin) $(install_dir)/$(bin)
+	chmod +x $(install_dir)/$(bin)
 
 .PHONY: clean
 clean:
