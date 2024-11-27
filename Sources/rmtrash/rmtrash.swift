@@ -8,7 +8,7 @@ struct Command: ParsableCommand {
         commandName: "rmtrash",
         abstract: "Move files and directories to the trash.",
         discussion: "rmtrash is a small utility that will move the file to macOS's Trash rather than obliterating the file (as rm does).",
-        version: "0.6.2",
+        version: "0.6.3",
         shouldDisplay: true,
         subcommands: [],
         helpNames: .long
@@ -199,7 +199,9 @@ struct Trash {
     
     
     func removeOne(path: String) throws {
-        let (url, isDir) = try permissionCheck(path: path)
+        guard case .info(url: let url, isDir: let isDir) = try permissionCheck(path: path) else {
+            return
+        }
         switch (config.interactiveMode, isDir) {
         case (.always, true):
             try examineDirectory(url)
@@ -253,12 +255,18 @@ struct Trash {
         }
     }
     
-    private func permissionCheck(path: String) throws -> (url: URL, isDir: Bool) {
+    enum PermissionCheckResult {
+        case skip
+        case info(url: URL, isDir: Bool)
+    }
+    
+    private func permissionCheck(path: String) throws -> PermissionCheckResult {
         // file exists check
         if !fileManager.fileExists(atPath: path) {
             if !config.force {
                 throw Panic("rmtrash: \(path): No such file or directory")
             }
+            return .skip
         }
         
         let url = URL(fileURLWithPath: path)
@@ -292,7 +300,7 @@ struct Trash {
             }
         }
         
-        return (url, isDir)
+        return .info(url: url, isDir: isDir)
     }
     
     private func examineDirectory(_ url: URL) throws {
