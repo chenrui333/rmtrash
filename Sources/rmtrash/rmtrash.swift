@@ -65,7 +65,7 @@ struct Command: ParsableCommand {
     }
     
     func parseArgs() throws -> Trash.Config {
-        var interactiveMode: Trash.Config.InteractiveMode = .once
+        var interactiveMode = Trash.Config.InteractiveMode(rawValue: ProcessInfo.processInfo.environment["RMTRASH_INTERACTIVE_MODE"] ?? "never") ?? .never
         if force {
             interactiveMode = .never
         } else if interactiveAlways {
@@ -216,7 +216,7 @@ struct Trash {
         if paths.isEmpty {
             throw Panic("rmtrash: missing operand")
         }
-                
+        
         if config.interactiveMode == .once {
             if try promptOnceCheck(paths: paths) == false {
                 return
@@ -294,7 +294,6 @@ struct Trash {
         
         return (url, isDir)
     }
-
     
     private func examineDirectory(_ url: URL) throws {
         guard question("examine files in directory: \(url.path)?") else {
