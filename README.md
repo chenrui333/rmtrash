@@ -1,13 +1,19 @@
-## rmtrash
+# rmtrash
 
 **rmtrash** is a small utility that will move the file to macOS's Trash rather than obliterating the file (as rm does).
 
 
-### Install
+
+## Install
 
 ```shell
 brew install tbxark/repo/rmtrash
 ```
+
+
+
+## Usage
+
 
 ### Syntax
 
@@ -24,8 +30,9 @@ rmtrash --version
 
 ### Options
 
+| flags                           | Description                                                  |
+| :------------------------------ | :----------------------------------------------------------- |
 | **-f**, **--force**             | Ignore nonexistant files, and never prompt before removing.  |
-| :------------------------------ | ------------------------------------------------------------ |
 | **-i**                          | Prompt before every removal.                                 |
 | **-I**                          | Prompt once before removing more than three files, or when removing recursively. This option is less intrusive than **-i**, but still gives protection against most mistakes. |
 | **--interactive**[**=***WHEN*]  | Prompt according to *WHEN*: **never**, **once** (**-I**), or **always** (**-i**). If *WHEN* is not specified, then never prompt. |
@@ -38,11 +45,26 @@ rmtrash --version
 | **--help**                      | Display a help message, and exit.                            |
 | **--version**                   | Display version information, and exit.                       |
 
+
 ### Usage notes
 
 If the **-I**/**--interactive=once** option is given, and there are more than three files or the **-r**/**-R**/**--recursive** options are specified, **rm** prompts before deleting anything. If the user does not respond **yes**/**y**/**Y** to the prompt, the entire command is aborted.
 
-If a file is unwritable, stdin is a terminal, and the **-f**/**--force** option is not given, or the **-i** or **--interactive=always** option is given, **rm** prompts the user for whether to remove the file. If the response is not **yes**/**y**/**Y**, the file is skipped.
+
+### Removing directories
+
+By default, rm does not remove directories. If the -r/-R/--recursive option is specified, however, rm removes any matching directories and their contents.
+
+If the specified directory is empty, it may be removed with the -d/--dir option, instead.
+
+
+### Environment
+
+- **RMTRASH_INTERACTIVE_MODE** 
+  If set, it will be used as the default value for the **--interactive** option.
+
+
+### Alias Recommended 
 
 Also, you can add the following aliases to your shell profile:
 
@@ -52,9 +74,11 @@ alias trash="rmtrash"
 alias rm="echo Use 'del', or the full path i.e. '/bin/rm'"
 ```
 
-### Known issues
 
-- **rm** cannot remove current directory but **rmtrash** can, But I think this is not a bug
+
+## Known issues
+
+- **rm** can't delete the current executable directory, but **rmtrash** can, but I don't think that's a bug, it's a feature.
 
 ### License
 **rmtrash** is released under the MIT license. [See LICENSE](LICENSE) for details.
