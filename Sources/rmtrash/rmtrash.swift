@@ -71,7 +71,7 @@ struct Command: ParsableCommand {
     
     func parseArgs() throws -> Trash.Config {
         if paths.isEmpty {
-            throw Panic("rmtrash: missing operand")
+            throw Panic("rmtrash: missing operand\nTry 'rmtrash --help' for more information.")
         }
         var interactiveMode = Trash.Config.InteractiveMode(rawValue: ProcessInfo.processInfo.environment["RMTRASH_INTERACTIVE_MODE"] ?? "never") ?? .never
         if force {
@@ -84,7 +84,7 @@ struct Command: ParsableCommand {
             if let mode = Trash.Config.InteractiveMode(rawValue: interactive) {
                 interactiveMode = mode
             } else {
-                throw Panic("rmtrash: invalid argument for --interactive: \(interactive)")
+                throw Panic("rmtrash: invalid argument for --interactive: \(interactive)nTry 'rmtrash --help' for more information.")
             }
         }
         return Trash.Config(
