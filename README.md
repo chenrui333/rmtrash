@@ -6,10 +6,21 @@
 
 ## Install
 
-```shell
+###### [Homebrew](https://brew.sh)
+
+```sh
 brew install tbxark/repo/rmtrash
 ```
 
+###### [Mint](https://github.com/yonaskolb/Mint)
+
+```sh
+mint install tbxark/rmtrash@master
+```
+
+###### Manually
+
+[Download](https://github.com/TBXark/rmtrash/releases/latest) the binary and put it in `/usr/local/bin`.
 
 
 ## Usage
