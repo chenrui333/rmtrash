@@ -15,7 +15,7 @@ brew install tbxark/repo/rmtrash
 ###### [Mint](https://github.com/yonaskolb/Mint)
 
 ```sh
-mint install tbxark/rmtrash@master
+mint install tbxark/rmtrash
 ```
 
 ###### Manually
