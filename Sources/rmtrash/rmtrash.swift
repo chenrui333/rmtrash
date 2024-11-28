@@ -48,23 +48,14 @@ struct Command: ParsableCommand {
     var paths: [String] = []
     
     func run() throws {
-        if version {
+        guard !version else {
             print("rmtrash version \(Command.configuration.version)")
-            Command.exit()
+            return
         }
-        do {
-            let args = try parseArgs()
-            Logger.level = args.verbose ? .verbose : .error
-            Logger.verbose("Arguments: \(args)")
-            let success = try Trash(config: args).removeMultiple(paths: paths)
-            if !success {
-                Command.exit(withError: ExitCode.failure)
-            }
-        } catch let error as Panic {
-            Logger.error(error.message)
-            Command.exit(withError: ExitCode.failure)
-        } catch {
-            Logger.error("rmtrash: \(error.localizedDescription)")
+        let args = try parseArgs()
+        Logger.level = args.verbose ? .verbose : .error
+        Logger.verbose("Arguments: \(args)")
+        if !Trash(config: args).removeMultiple(paths: paths) {
             Command.exit(withError: ExitCode.failure)
         }
     }
@@ -99,6 +90,7 @@ struct Command: ParsableCommand {
     }
 }
 
+// MARK: - FileManager
 extension FileManager {
     func trashItem(at url: URL) throws {
         Logger.verbose("rmtrash: \(url.path)")
@@ -133,11 +125,11 @@ extension FileManager {
     
 }
 
+// MARK: - Logger
 struct Logger {
     enum Level: Int {
         case verbose = 0
         case error = 1
-        case panic = 2
     }
     
     static var level: Level = .error
@@ -161,14 +153,17 @@ struct Logger {
 }
 
 
-struct Panic: Error {
+// MARK: - Error
+struct Panic: Error, CustomDebugStringConvertible {
     let message: String
     var localizedDescription: String { message }
+    var debugDescription: String { message }
     init(_ message: String) {
         self.message = message
     }
 }
 
+// MARK: - Trash
 struct Trash {
     
     struct Config: Codable {
@@ -200,51 +195,98 @@ struct Trash {
         return answer?.lowercased() == "y" || answer?.lowercased() == "yes"
     }
     
-    
-    func removeOne(path: String) throws {
-        guard case .info(url: let url, isDir: let isDir) = try permissionCheck(path: path) else {
-            return
-        }
-        switch (config.interactiveMode, isDir) {
-        case (.always, true):
-            try examineDirectory(url)
-        case (.always, false):
-            if question("remove \(path)?")  {
-                try fileManager.trashItem(at: url)
-            }
-        case (.never, _), (.once, _):
-            try fileManager.trashItem(at: url)
-        }
+    private func canNotRemovePanic(path: String, err: String) -> Panic {
+        return Panic("rmtrash: cannot remove '\(path)': \(err)")
     }
     
-    func removeMultiple(paths: [String]) throws  -> Bool {
+}
+
+// MARK: Remove handling
+extension Trash {
+    
+    func removeMultiple(paths: [String]) -> Bool {
         guard paths.count > 0 else {
             return true
         }
         if config.interactiveMode == .once {
-            if try promptOnceCheck(paths: paths) == false {
+            if !promptOnceCheck(paths: paths) {
                 return true
             }
         }
         var success = true
         for path in paths {
-            do {
-                try removeOne(path: path)
-            } catch let error as Panic {
-                Logger.error(error.message)
-                success = false
-            } catch {
-                Logger.error("rmtrash: \(error.localizedDescription)")
-                success = false
-            }
+            success = removeOne(path: path) && success
         }
         return success
     }
     
-    private func promptOnceCheck(paths: [String]) throws -> Bool {
+    @discardableResult private func removeOne(path: String) -> Bool {
+        do {
+            guard case .info(url: let url, isDir: let isDir) = try permissionCheck(path: path) else {
+                return true
+            }
+            switch (config.interactiveMode, isDir) {
+            case (.always, true):
+                removeDirectory(path)
+            case (.always, false):
+                if question("remove file \(path)?")  {
+                    try fileManager.trashItem(at: url)
+                }
+            case (.never, _), (.once, _):
+                try fileManager.trashItem(at: url)
+            }
+            return true
+        } catch let error as Panic {
+            Logger.error(error.message)
+        } catch {
+            Logger.error("rmtrash: \(error.localizedDescription)")
+        }
+        return false
+    }
+    
+    
+    private func removeDirectory(_ path: String)  {
+        let url = URL(fileURLWithPath: path)
+        // when directory is empty, no examine needed
+        if fileManager.isEmptyDirectory(url) {
+            removeEmptyDirectory(path)
+            return
+        }
+        guard question("descend into directory: '\(url.relativePath)'?") else {
+            return
+        }
+        let subs = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
+        for sub in subs {
+            let subPath = URL(fileURLWithPath: path).appendingPathComponent(sub).relativePath
+            removeOne(path: subPath)
+        }
+        // try to remove the directory after all files in it are removed
+        removeEmptyDirectory(path)
+    }
+    
+    private func removeEmptyDirectory(_ path: String) {
+        guard question("remove directory '\(path)'?") else {
+            return
+        }
+        var conf = config
+        conf.recursive = false          // no recursive anymore
+        conf.emptyDirs = true           // but can remove empty directories
+        conf.interactiveMode = .never   // and no interactive mode, because did interactive before
+        Trash(config: conf).removeOne(path: path)
+    }
+}
+
+
+// MARK: Permission Check
+extension Trash {
+    
+    private func promptOnceCheck(paths: [String]) -> Bool {
         var isDirs = [String: Bool]()
         for path in paths {
-            isDirs[path] = try fileManager.isDirectory(URL(fileURLWithPath: path))
+            guard let res = try? fileManager.isDirectory(URL(fileURLWithPath: path)) else {
+                continue
+            }
+            isDirs[path] = res
         }
         let dirs = isDirs.filter({ $0.value }).keys.map({ $0 })
         let fileCount = isDirs.filter({ $0.value == false }).count
@@ -262,46 +304,43 @@ struct Trash {
         }
     }
     
-    enum PermissionCheckResult {
-        case skip
-        case info(url: URL, isDir: Bool)
-    }
-    
     private func permissionCheck(path: String) throws -> PermissionCheckResult {
         // file exists check
         if !fileManager.fileExists(atPath: path) {
             if !config.force {
-                throw Panic("rmtrash: \(path): No such file or directory")
+                throw canNotRemovePanic(path: path, err: "No such file or directory")
             }
-            return .skip
+            return .skip // skip nonexistent files when force is set
         }
         
         let url = URL(fileURLWithPath: path)
+        let isDir = try fileManager.isDirectory(url)
+
         // cross mount point check
         if config.oneFileSystem  {
             let cross = try fileManager.isCrossMountPoint(url)
             if cross {
-                throw Panic("rmtrash: \(path): cross-device link")
+                throw canNotRemovePanic(path: path, err: "Cross-device link")
             }
         }
         
         // directory check
-        let isDir = try fileManager.isDirectory(url)
-        
         if isDir {
             // root directory check
             if fileManager.isRootDir(url) && config.preserveRoot {
-                throw Panic("rmtrash: it is dangerous to operate recursively on '/'")
+                throw canNotRemovePanic(path: path, err: "Preserve root")
             }
             
             // recursive check
-            if !config.recursive {  // 1. is a directory and not recursive
-                if config.emptyDirs { // 1.1. can remove empty directories
-                    if !fileManager.isEmptyDirectory(url) { // 1.1.1. can't remove non-empty directories
-                        throw Panic("rmtrash: \(path): Directory not empty")
+            if !config.recursive {
+                if config.emptyDirs {
+                    if !fileManager.isEmptyDirectory(url) {
+                        // can remove empty directory when emptyDirs set but not recursive
+                        throw canNotRemovePanic(path: path, err: "Directory not empty")
                     }
-                } else {  // 2. can't remove directories
-                    throw Panic("rmtrash: \(path): is a directory")
+                } else {
+                    // can not remove directory when not recursive and not emptyDirs
+                    throw canNotRemovePanic(path: path, err: "Is a directory")
                     
                 }
             }
@@ -310,28 +349,8 @@ struct Trash {
         return .info(url: url, isDir: isDir)
     }
     
-    private func examineDirectory(_ url: URL) throws {
-        guard question("examine files in directory: \(url.path)?") else {
-            return
-        }
-        guard let fileEnumerator = fileManager.enumerator(at: url, includingPropertiesForKeys: nil, options: [.skipsSubdirectoryDescendants]) else {
-            return
-        }
-        for case let fileURL as URL in fileEnumerator {
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isDirectoryKey]) else {
-                continue
-            }
-            if resourceValues.isDirectory == false {
-                if question("remove \(fileURL.path)?") {
-                    try fileManager.trashItem(at: fileURL)
-                }
-            } else {
-                try examineDirectory(fileURL)
-            }
-        }
-        // remove current directory if empty
-        if fileManager.isEmptyDirectory(url) {
-            try fileManager.trashItem(at: url)
-        }
+    enum PermissionCheckResult {
+        case skip
+        case info(url: URL, isDir: Bool)
     }
 }

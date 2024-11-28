@@ -41,7 +41,7 @@ rmtrash --version
 
 ### Options
 
-| flags                           | Description                                                  |
+| Options                         | Description                                                  |
 | :------------------------------ | :----------------------------------------------------------- |
 | **-f**, **--force**             | Ignore nonexistant files, and never prompt before removing.  |
 | **-i**                          | Prompt before every removal.                                 |
