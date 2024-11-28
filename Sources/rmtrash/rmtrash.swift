@@ -248,13 +248,15 @@ struct Trash {
         }
         let dirs = isDirs.filter({ $0.value }).keys.map({ $0 })
         let fileCount = isDirs.filter({ $0.value == false }).count
+        let dirWord = dirs.count == 1 ? "dir" : "dirs"
+        let fileWord = fileCount == 1 ? "file" : "files"
         switch (dirs.count > 0, fileCount > 0) {
         case (true, false):
-            return question("recursively remove \(dirs.count == 1 ? dirs[0] : "\(dirs.count) dirs")?")
+            return question("recursively remove \(dirs.count) \(dirWord)?")
         case (false, true):
-            return fileCount <= 3 || question("remove \(fileCount) files?")
+            return fileCount <= 3 || question("remove \(fileCount) \(fileWord)?")
         case (true, true):
-            return question("recursively remove \(dirs.count) dirs and \(fileCount) files?")
+            return question("recursively remove \(dirs.count) \(dirWord) and \(fileCount) \(fileWord)?")
         case (false, false):
             return true
         }
