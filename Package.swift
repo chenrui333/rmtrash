@@ -6,11 +6,11 @@ let package = Package(
     platforms: [
         .macOS(.v10_10)
     ],
-    dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
-    ],
     products: [
         .executable(name: "rmtrash", targets: ["rmtrash"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
     ],
     targets: [
         .executableTarget(
