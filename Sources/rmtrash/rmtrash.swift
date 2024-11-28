@@ -252,7 +252,7 @@ extension Trash {
             removeEmptyDirectory(path)
             return
         }
-        guard question("descend into directory: '\(url.relativePath)'?") else {
+        guard question("descend into directory: '\(path)'?") else {
             return
         }
         let subs = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
