@@ -45,7 +45,7 @@ struct Command: ParsableCommand {
     var version: Bool = false
     
     @Argument(help: "The files or directories to move to trash.")
-    var paths: [String]
+    var paths: [String] = []
     
     func run() throws {
         if version {
@@ -56,15 +56,23 @@ struct Command: ParsableCommand {
             let args = try parseArgs()
             Logger.level = args.verbose ? .verbose : .error
             Logger.verbose("Arguments: \(args)")
-            try Trash(config: args).removeMultiple(paths: paths)
+            let success = try Trash(config: args).removeMultiple(paths: paths)
+            if !success {
+                Command.exit(withError: ExitCode.failure)
+            }
         } catch let error as Panic {
-            Logger.panic(error.message)
+            Logger.error(error.message)
+            Command.exit(withError: ExitCode.failure)
         } catch {
-            Logger.panic("rmtrash: \(error.localizedDescription)")
+            Logger.error("rmtrash: \(error.localizedDescription)")
+            Command.exit(withError: ExitCode.failure)
         }
     }
     
     func parseArgs() throws -> Trash.Config {
+        if paths.isEmpty {
+            throw Panic("rmtrash: missing operand")
+        }
         var interactiveMode = Trash.Config.InteractiveMode(rawValue: ProcessInfo.processInfo.environment["RMTRASH_INTERACTIVE_MODE"] ?? "never") ?? .never
         if force {
             interactiveMode = .never
@@ -150,13 +158,8 @@ struct Logger {
         var stdError = StdError()
         print(message, to: &stdError)
     }
-    
-    static func panic(_ message: String) {
-        var stdError = StdError()
-        print(message, to: &stdError)
-        exit(1)
-    }
 }
+
 
 struct Panic: Error {
     let message: String
@@ -214,26 +217,28 @@ struct Trash {
         }
     }
     
-    func removeMultiple(paths: [String]) throws {
-        if paths.isEmpty {
-            throw Panic("rmtrash: missing operand")
+    func removeMultiple(paths: [String]) throws  -> Bool {
+        guard paths.count > 0 else {
+            return true
         }
-        
         if config.interactiveMode == .once {
             if try promptOnceCheck(paths: paths) == false {
-                return
+                return true
             }
         }
-        
+        var success = true
         for path in paths {
             do {
                 try removeOne(path: path)
             } catch let error as Panic {
                 Logger.error(error.message)
+                success = false
             } catch {
-                throw error
+                Logger.error("rmtrash: \(error.localizedDescription)")
+                success = false
             }
         }
+        return success
     }
     
     private func promptOnceCheck(paths: [String]) throws -> Bool {
