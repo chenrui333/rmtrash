@@ -17,6 +17,15 @@ test:
 .PHONY: build
 build:
 	swift build -c release
+	# install config in brew formula 
+	# bin.install ".build/release/rmtrash"
+
+
+.PHONY: manual
+manual:
+	swift package plugin generate-manual 
+	# install config in brew formula 
+	# man1.install ".build/plugins/GenerateManual/outputs/rmtrash/rmtrash.1"
 
 .PHONY: build-universal
 build-universal:
