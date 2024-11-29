@@ -49,7 +49,7 @@ struct Command: ParsableCommand {
     
     func run() throws {
         guard !version else {
-            print("rmtrash version \(Command.configuration.version)")
+            print(Command.configuration.version)
             return
         }
         let args = try parseArgs()
