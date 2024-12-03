@@ -254,20 +254,21 @@ extension Trash {
             return
         }
 
-        if #available(macOS 10.15, *), let enumerator = FileManager.default.enumerator(
-            at: URL(fileURLWithPath: path),
-            includingPropertiesForKeys: [],
-            options: [.skipsSubdirectoryDescendants, .producesRelativePathURLs]
-        ) {
-            for case let fileURL as URL in enumerator {
-                let subPath = URL(fileURLWithPath: path).appendingPathComponent(fileURL.relativePath).relativePath
-                removeOne(path: subPath)
+        if #available(macOS 10.15, *) {
+            if  let enumerator = fileManager.enumerator(at: URL(fileURLWithPath: path),
+                                                        includingPropertiesForKeys: [],
+                                                        options: [.skipsSubdirectoryDescendants, .producesRelativePathURLs]) {
+                for case let fileURL as URL in enumerator {
+                    let subPath = URL(fileURLWithPath: path).appendingPathComponent(fileURL.relativePath).relativePath
+                    removeOne(path: subPath)
+                }
             }
         } else {
-            let subs = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
-            for sub in subs {
-                let subPath = URL(fileURLWithPath: path).appendingPathComponent(sub).relativePath
-                removeOne(path: subPath)
+            if let subs = try? fileManager.contentsOfDirectory(atPath: path) {
+                for sub in subs {
+                    let subPath = URL(fileURLWithPath: path).appendingPathComponent(sub).relativePath
+                    removeOne(path: subPath)
+                }
             }
         }
 
