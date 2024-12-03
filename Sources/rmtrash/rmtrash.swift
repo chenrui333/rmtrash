@@ -3,7 +3,7 @@ import ArgumentParser
 
 @main
 struct Command: ParsableCommand {
-    
+
     static var configuration: CommandConfiguration = CommandConfiguration(
         commandName: "rmtrash",
         abstract: "Move files and directories to the trash.",
@@ -13,40 +13,40 @@ struct Command: ParsableCommand {
         subcommands: [],
         helpNames: .long
     )
-    
+
     @Flag(name: .shortAndLong, help: "Ignore nonexistant files, and never prompt before removing.")
     var force: Bool = false
-    
+
     @Flag(name: .customShort("i"), help: "Prompt before every removal.")
     var interactiveAlways: Bool = false
-    
+
     @Flag(name: .customShort("I"), help: "Prompt once before removing more than three files, or when removing recursively. This option is less intrusive than -i, but still gives protection against most mistakes.")
     var interactiveOnce: Bool = false
-    
+
     @Option(name: .customLong("interactive"), help: "Prompt according to WHEN: never, once (-I), or always (-i). If WHEN is not specified, then prompt always.")
     var interactive: String?
-    
+
     @Flag(name: [.customLong("one-file-system"), .customShort("x")], help: "When removing a hierarchy recursively, skip any directory that is on a file system different from that of the corresponding command line argument ")
     var oneFileSystem: Bool = false
-    
+
     @Flag(name: .customLong("preserve-root"), inversion: .prefixedNo, help: "Do not remove \"/\" (the root directory), which is the default behavior.")
     var preserveRoot: Bool = true
-    
+
     @Flag(name: [.short, .long, .customShort("R")], help: "Recursively remove directories and their contents.")
     var recursive: Bool = false
-    
+
     @Flag(name: [.customShort("d"), .customLong("dir")], help: "Remove empty directories. This option permits you to remove a directory without specifying -r/-R/--recursive, provided that the directory is empty. In other words, rm -d is equivalent to using rmdir.")
     var emptyDirs: Bool = false
-    
+
     @Flag(name: .shortAndLong, help: "Verbose mode; explain at all times what is being done.")
     var verbose: Bool = false
-    
+
     @Flag(name: .long, help: "Display version information, and exit.")
     var version: Bool = false
-    
+
     @Argument(help: "The files or directories to move to trash.")
     var paths: [String] = []
-    
+
     func run() throws {
         guard !version else {
             print(Command.configuration.version)
@@ -59,7 +59,7 @@ struct Command: ParsableCommand {
             Command.exit(withError: ExitCode.failure)
         }
     }
-    
+
     func parseArgs() throws -> Trash.Config {
         if paths.isEmpty {
             throw Panic("rmtrash: missing operand\nTry 'rmtrash --help' for more information.")
@@ -96,14 +96,14 @@ extension FileManager {
         Logger.verbose("rmtrash: \(url.path)")
         try trashItem(at: url, resultingItemURL: nil)
     }
-    
+
     func isDirectory(_ url: URL) throws -> Bool {
         let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey])
         return resourceValues.isDirectory == true
     }
-    
+
     func isEmptyDirectory(_ url: URL) -> Bool {
-        guard let enumerator = enumerator(at: url, includingPropertiesForKeys: nil,  options: []) else {
+        guard let enumerator = enumerator(at: url, includingPropertiesForKeys: nil, options: []) else {
             return true
         }
         for _ in enumerator {
@@ -111,18 +111,18 @@ extension FileManager {
         }
         return true
     }
-    
+
     func isRootDir(_ url: URL) -> Bool {
         return url.standardizedFileURL.path == "/"
     }
-    
+
     func isCrossMountPoint(_ url: URL) throws -> Bool {
         let cur = URL(fileURLWithPath: currentDirectoryPath)
         let curVol = try cur.resourceValues(forKeys: [URLResourceKey.volumeURLKey])
         let urlVol = try url.resourceValues(forKeys: [URLResourceKey.volumeURLKey])
         return curVol.volume != urlVol.volume
     }
-    
+
 }
 
 // MARK: - Logger
@@ -131,27 +131,26 @@ struct Logger {
         case verbose = 0
         case error = 1
     }
-    
+
     static var level: Level = .error
-    
+
     struct StdError: TextOutputStream {
         mutating func write(_ string: String) {
             fputs(string, stderr)
         }
     }
-    
+
     static func verbose(_ message: String) {
         guard level.rawValue <= Level.verbose.rawValue else { return }
         print(message)
     }
-    
+
     static func error(_ message: String) {
         guard level.rawValue <= Level.error.rawValue else { return }
         var stdError = StdError()
         print(message, to: &stdError)
     }
 }
-
 
 // MARK: - Error
 struct Panic: Error, CustomDebugStringConvertible {
@@ -165,14 +164,14 @@ struct Panic: Error, CustomDebugStringConvertible {
 
 // MARK: - Trash
 struct Trash {
-    
+
     struct Config: Codable {
         enum InteractiveMode: String, ExpressibleByArgument, Codable {
             case always
             case once
             case never
         }
-        
+
         var interactiveMode: InteractiveMode
         var force: Bool
         var recursive: Bool
@@ -181,29 +180,29 @@ struct Trash {
         var oneFileSystem: Bool
         var verbose: Bool
     }
-    
+
     let config: Config
     let fileManager = FileManager.default
-    
+
     init(config: Config) {
         self.config = config
     }
-    
+
     private func question(_ message: String) -> Bool {
         print("\(message) (y/n) ", terminator: "")
         let answer = readLine()
         return answer?.lowercased() == "y" || answer?.lowercased() == "yes"
     }
-    
+
     private func canNotRemovePanic(path: String, err: String) -> Panic {
         return Panic("rmtrash: cannot remove '\(path)': \(err)")
     }
-    
+
 }
 
 // MARK: Remove handling
 extension Trash {
-    
+
     func removeMultiple(paths: [String]) -> Bool {
         guard paths.count > 0 else {
             return true
@@ -219,7 +218,7 @@ extension Trash {
         }
         return success
     }
-    
+
     @discardableResult private func removeOne(path: String) -> Bool {
         do {
             guard case .info(url: let url, isDir: let isDir) = try permissionCheck(path: path) else {
@@ -229,7 +228,7 @@ extension Trash {
             case (.always, true):
                 removeDirectory(path)
             case (.always, false):
-                if question("remove file \(path)?")  {
+                if question("remove file \(path)?") {
                     try fileManager.trashItem(at: url)
                 }
             case (.never, _), (.once, _):
@@ -243,9 +242,8 @@ extension Trash {
         }
         return false
     }
-    
-    
-    private func removeDirectory(_ path: String)  {
+
+    private func removeDirectory(_ path: String) {
         let url = URL(fileURLWithPath: path)
         // when directory is empty, no examine needed
         if fileManager.isEmptyDirectory(url) {
@@ -255,12 +253,12 @@ extension Trash {
         guard question("descend into directory: '\(path)'?") else {
             return
         }
-       
+
         if #available(macOS 10.15, *), let enumerator = FileManager.default.enumerator(
             at: URL(fileURLWithPath: path),
             includingPropertiesForKeys: [],
             options: [.skipsSubdirectoryDescendants, .producesRelativePathURLs]
-        )  {
+        ) {
             for case let fileURL as URL in enumerator {
                 let subPath = URL(fileURLWithPath: path).appendingPathComponent(fileURL.relativePath).relativePath
                 removeOne(path: subPath)
@@ -272,11 +270,11 @@ extension Trash {
                 removeOne(path: subPath)
             }
         }
-        
+
         // try to remove the directory after all files in it are removed
         removeEmptyDirectory(path)
     }
-    
+
     private func removeEmptyDirectory(_ path: String) {
         guard question("remove directory '\(path)'?") else {
             return
@@ -289,10 +287,9 @@ extension Trash {
     }
 }
 
-
 // MARK: Permission Check
 extension Trash {
-    
+
     private func promptOnceCheck(paths: [String]) -> Bool {
         var isDirs = [String: Bool]()
         for path in paths {
@@ -316,7 +313,7 @@ extension Trash {
             return true
         }
     }
-    
+
     private func permissionCheck(path: String) throws -> PermissionCheckResult {
         // file exists check
         if !fileManager.fileExists(atPath: path) {
@@ -325,25 +322,25 @@ extension Trash {
             }
             return .skip // skip nonexistent files when force is set
         }
-        
+
         let url = URL(fileURLWithPath: path)
         let isDir = try fileManager.isDirectory(url)
 
         // cross mount point check
-        if config.oneFileSystem  {
+        if config.oneFileSystem {
             let cross = try fileManager.isCrossMountPoint(url)
             if cross {
                 throw canNotRemovePanic(path: path, err: "Cross-device link")
             }
         }
-        
+
         // directory check
         if isDir {
             // root directory check
             if fileManager.isRootDir(url) && config.preserveRoot {
                 throw canNotRemovePanic(path: path, err: "Preserve root")
             }
-            
+
             // recursive check
             if !config.recursive {
                 if config.emptyDirs {
@@ -354,14 +351,14 @@ extension Trash {
                 } else {
                     // can not remove directory when not recursive and not emptyDirs
                     throw canNotRemovePanic(path: path, err: "Is a directory")
-                    
+
                 }
             }
         }
-        
+
         return .info(url: url, isDir: isDir)
     }
-    
+
     enum PermissionCheckResult {
         case skip
         case info(url: URL, isDir: Bool)

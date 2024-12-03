@@ -7,16 +7,16 @@ let package = Package(
         .macOS(.v10_10)
     ],
     products: [
-        .executable(name: "rmtrash", targets: ["rmtrash"]),
+        .executable(name: "rmtrash", targets: ["rmtrash"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0")
     ],
     targets: [
         .executableTarget(
             name: "rmtrash",
             dependencies: [
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-            ]),
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ])
     ]
 )

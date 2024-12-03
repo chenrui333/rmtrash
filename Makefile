@@ -45,6 +45,11 @@ install: build
 	mv .build/release/$(bin) $(install_dir)/$(bin)
 	chmod +x $(install_dir)/$(bin)
 
+.PHONY: style
+style:
+	swiftlint --autocorrect Sources
+	swiftlint --autocorrect Package.swift
+
 .PHONY: clean
 clean:
 	rm -rf .build .dist
