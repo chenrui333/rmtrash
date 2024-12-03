@@ -2,7 +2,7 @@
 
 **rmtrash** is a small utility that will move the file to macOS's Trash rather than obliterating the file (as rm does).
 
-
+![](preview.png)
 
 ## Install
 
