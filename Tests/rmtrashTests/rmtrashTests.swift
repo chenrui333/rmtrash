@@ -152,44 +152,10 @@ class FileManagerMock: FileManagerType {
     }
 }
 
-struct AlwaysSomeAnswer: Question {
+struct StaticAnswer: Question {
     let value: Bool
     func ask(_ message: String) -> Bool {
         return value
-    }
-}
-
-extension RmTrashTests {
-    
-    func makeTrash(
-        interactiveMode: Trash.Config.InteractiveMode = .never,
-        force: Bool = true,
-        recursive: Bool = false,
-        emptyDirs: Bool = false,
-        preserveRoot: Bool = true,
-        oneFileSystem: Bool = false,
-        verbose: Bool = false,
-        fileManager: FileManagerType? = nil,
-        question: Question? = nil
-    ) -> Trash {
-        let config = Trash.Config(
-            interactiveMode: interactiveMode,
-            force: force,
-            recursive: recursive,
-            emptyDirs: emptyDirs,
-            preserveRoot: preserveRoot,
-            oneFileSystem: oneFileSystem,
-            verbose: verbose
-        )
-        return Trash(
-            config: config,
-            question: question ?? AlwaysSomeAnswer(value: true),
-            fileManager: fileManager ?? FileManagerMock(root: [])
-        )
-    }
-    
-    func assertFileStructure(_ fileManager: FileManagerMock, expectedFiles: [FileMock], file: StaticString = #file, line: UInt = #line) {
-        XCTAssertEqual(fileManager.currentFileStructure(), expectedFiles, file: file, line: line)
     }
 }
 
@@ -282,7 +248,7 @@ final class RmTrashTests: XCTestCase {
     func testInteractiveModeOnce() {
         let mockFiles: [FileMock] = [
             .file(name: "test1.txt"),
-            .file(name: "test2.txt")
+            .directory(name: "dir1", sub: [])
         ]
         
         // Test with yes answer
@@ -290,10 +256,11 @@ final class RmTrashTests: XCTestCase {
         let yesTrash = makeTrash(
             interactiveMode: .once,
             force: false,
+            recursive: true,
             fileManager: yesFileManager,
-            question: AlwaysSomeAnswer(value: true)
+            question: StaticAnswer(value: true)
         )
-        XCTAssertTrue(yesTrash.removeMultiple(paths: ["/test1.txt", "/test2.txt"]))
+        XCTAssertTrue(yesTrash.removeMultiple(paths: ["/test1.txt", "/dir1"]))
         assertFileStructure(yesFileManager, expectedFiles: [])
         
         // Test with no answer
@@ -301,10 +268,11 @@ final class RmTrashTests: XCTestCase {
         let noTrash = makeTrash(
             interactiveMode: .once,
             force: false,
+            recursive: true,
             fileManager: noFileManager,
-            question: AlwaysSomeAnswer(value: false)
+            question: StaticAnswer(value: false)
         )
-        XCTAssertTrue(noTrash.removeMultiple(paths: ["/test1.txt", "/test2.txt"]))
+        XCTAssertTrue(noTrash.removeMultiple(paths: ["/test1.txt", "/dir1"]))
         assertFileStructure(noFileManager, expectedFiles: mockFiles)
     }
     
@@ -320,7 +288,7 @@ final class RmTrashTests: XCTestCase {
             interactiveMode: .always,
             force: false,
             fileManager: yesFileManager,
-            question: AlwaysSomeAnswer(value: true)
+            question: StaticAnswer(value: true)
         )
         XCTAssertTrue(yesTrash.removeMultiple(paths: ["/test1.txt", "/test2.txt"]))
         assertFileStructure(yesFileManager, expectedFiles: [])
@@ -331,7 +299,7 @@ final class RmTrashTests: XCTestCase {
             interactiveMode: .always,
             force: false,
             fileManager: noFileManager,
-            question: AlwaysSomeAnswer(value: false)
+            question: StaticAnswer(value: false)
         )
         XCTAssertTrue(noTrash.removeMultiple(paths: ["/test1.txt", "/test2.txt"]))
         assertFileStructure(noFileManager, expectedFiles: mockFiles)
@@ -374,5 +342,40 @@ final class RmTrashTests: XCTestCase {
         // Test remaining file deletion
         XCTAssertTrue(trash.removeMultiple(paths: ["/test2.txt"]))
         assertFileStructure(fileManager, expectedFiles: [])
+    }
+}
+
+
+extension RmTrashTests {
+    
+    func makeTrash(
+        interactiveMode: Trash.Config.InteractiveMode = .never,
+        force: Bool = true,
+        recursive: Bool = false,
+        emptyDirs: Bool = false,
+        preserveRoot: Bool = true,
+        oneFileSystem: Bool = false,
+        verbose: Bool = false,
+        fileManager: FileManagerType? = nil,
+        question: Question? = nil
+    ) -> Trash {
+        let config = Trash.Config(
+            interactiveMode: interactiveMode,
+            force: force,
+            recursive: recursive,
+            emptyDirs: emptyDirs,
+            preserveRoot: preserveRoot,
+            oneFileSystem: oneFileSystem,
+            verbose: verbose
+        )
+        return Trash(
+            config: config,
+            question: question ?? StaticAnswer(value: true),
+            fileManager: fileManager ?? FileManagerMock(root: [])
+        )
+    }
+    
+    func assertFileStructure(_ fileManager: FileManagerMock, expectedFiles: [FileMock], file: StaticString = #file, line: UInt = #line) {
+        XCTAssertEqual(fileManager.currentFileStructure(), expectedFiles, file: file, line: line)
     }
 }
