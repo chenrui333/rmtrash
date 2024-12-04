@@ -20,7 +20,7 @@ enum FileMock: Equatable {
     }
 }
 
-class MockFileManager: FileManagerType {
+class FileManagerMock: FileManagerType {
     private var root: [FileMock]
     
     init(root: [FileMock]) {
@@ -167,7 +167,7 @@ final class rmtrashTests: XCTestCase {
                 .file(name: "file1.txt")
             ])
         ]
-        let fileManager = MockFileManager(root: mockFiles)
+        let fileManager = FileManagerMock(root: mockFiles)
         
         // Test force config - should remove without prompting
         let forceConfig = Trash.Config(
@@ -192,7 +192,7 @@ final class rmtrashTests: XCTestCase {
                 ])
             ])
         ]
-        let fileManager = MockFileManager(root: mockFiles)
+        let fileManager = FileManagerMock(root: mockFiles)
         
         // Test non-recursive config - should fail
         let nonRecursiveConfig = Trash.Config(
@@ -228,7 +228,7 @@ final class rmtrashTests: XCTestCase {
                 .file(name: "file.txt")
             ])
         ]
-        let fileManager = MockFileManager(root: mockFiles)
+        let fileManager = FileManagerMock(root: mockFiles)
         
         // Test emptyDirs config
         let emptyDirsConfig = Trash.Config(
@@ -249,7 +249,7 @@ final class rmtrashTests: XCTestCase {
         let mockFiles: [FileMock] = [
             .directory(name: "testdir", sub: [])
         ]
-        let fileManager = MockFileManager(root: mockFiles)
+        let fileManager = FileManagerMock(root: mockFiles)
         
         // Test preserveRoot config
         let preserveRootConfig = Trash.Config(
@@ -296,7 +296,7 @@ final class rmtrashTests: XCTestCase {
                 ])
             ])
         ]
-        let fileManager = MockFileManager(root: initialFiles)
+        let fileManager = FileManagerMock(root: initialFiles)
         
         let config = Trash.Config(
             interactiveMode: .never,
