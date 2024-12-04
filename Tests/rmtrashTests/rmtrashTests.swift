@@ -153,11 +153,6 @@ class FileManagerMock: FileManagerType {
 }
 
 final class rmtrashTests: XCTestCase {
-
-    func testExample() throws {
-        // Write your test here and use XCTAssert functions to check expected conditions.
-    }
-
     // MARK: - Config Tests
     
     func testForceConfig() {
