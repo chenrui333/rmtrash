@@ -17,6 +17,10 @@ let package = Package(
             name: "rmtrash",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
-            ])
+            ]),
+        .testTarget(
+            name: "rmtrashTests",
+            dependencies: ["rmtrash"]
+        )
     ]
 )
