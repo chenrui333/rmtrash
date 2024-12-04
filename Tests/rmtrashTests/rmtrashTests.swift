@@ -152,8 +152,48 @@ class FileManagerMock: FileManagerType {
     }
 }
 
-final class rmtrashTests: XCTestCase {
-    // MARK: - Config Tests
+struct AlwaysSomeAnswer: Question {
+    let value: Bool
+    func ask(_ message: String) -> Bool {
+        return value
+    }
+}
+
+extension RmTrashTests {
+    
+    func makeTrash(
+        interactiveMode: Trash.Config.InteractiveMode = .never,
+        force: Bool = true,
+        recursive: Bool = false,
+        emptyDirs: Bool = false,
+        preserveRoot: Bool = true,
+        oneFileSystem: Bool = false,
+        verbose: Bool = false,
+        fileManager: FileManagerType? = nil,
+        question: Question? = nil
+    ) -> Trash {
+        let config = Trash.Config(
+            interactiveMode: interactiveMode,
+            force: force,
+            recursive: recursive,
+            emptyDirs: emptyDirs,
+            preserveRoot: preserveRoot,
+            oneFileSystem: oneFileSystem,
+            verbose: verbose
+        )
+        return Trash(
+            config: config,
+            question: question ?? AlwaysSomeAnswer(value: true),
+            fileManager: fileManager ?? FileManagerMock(root: [])
+        )
+    }
+    
+    func assertFileStructure(_ fileManager: FileManagerMock, expectedFiles: [FileMock], file: StaticString = #file, line: UInt = #line) {
+        XCTAssertEqual(fileManager.currentFileStructure(), expectedFiles, file: file, line: line)
+    }
+}
+
+final class RmTrashTests: XCTestCase {
     
     func testForceConfig() {
         let mockFiles: [FileMock] = [
@@ -164,18 +204,13 @@ final class rmtrashTests: XCTestCase {
         ]
         let fileManager = FileManagerMock(root: mockFiles)
         
-        // Test force config - should remove without prompting
-        let forceConfig = Trash.Config(
-            interactiveMode: .never,
-            force: true,
-            recursive: false,
-            emptyDirs: false,
-            preserveRoot: true,
-            oneFileSystem: false,
-            verbose: false
-        )
-        let trashWithForce = Trash(config: forceConfig, fileManager: fileManager)
-        XCTAssertTrue(trashWithForce.removeMultiple(paths: ["/test.txt"]))
+        let trash = makeTrash(force: true, fileManager: fileManager)
+        XCTAssertTrue(trash.removeMultiple(paths: ["/test.txt"]))
+        assertFileStructure(fileManager, expectedFiles: [
+            .directory(name: "dir1", sub: [
+                .file(name: "file1.txt")
+            ])
+        ])
     }
     
     func testRecursiveConfig() {
@@ -189,31 +224,15 @@ final class rmtrashTests: XCTestCase {
         ]
         let fileManager = FileManagerMock(root: mockFiles)
         
-        // Test non-recursive config - should fail
-        let nonRecursiveConfig = Trash.Config(
-            interactiveMode: .never,
-            force: true,
-            recursive: false,
-            emptyDirs: false,
-            preserveRoot: true,
-            oneFileSystem: false,
-            verbose: false
-        )
-        let trashNonRecursive = Trash(config: nonRecursiveConfig, fileManager: fileManager)
-        XCTAssertFalse(trashNonRecursive.removeMultiple(paths: ["/dir1"]))
+        // Test non-recursive config
+        let nonRecursiveTrash = makeTrash(fileManager: fileManager)
+        XCTAssertFalse(nonRecursiveTrash.removeMultiple(paths: ["/dir1"]))
+        assertFileStructure(fileManager, expectedFiles: mockFiles)
         
-        // Test recursive config - should succeed
-        let recursiveConfig = Trash.Config(
-            interactiveMode: .never,
-            force: true,
-            recursive: true,
-            emptyDirs: false,
-            preserveRoot: true,
-            oneFileSystem: false,
-            verbose: false
-        )
-        let trashRecursive = Trash(config: recursiveConfig, fileManager: fileManager)
-        XCTAssertTrue(trashRecursive.removeMultiple(paths: ["/dir1"]))
+        // Test recursive config
+        let recursiveTrash = makeTrash(recursive: true, fileManager: fileManager)
+        XCTAssertTrue(recursiveTrash.removeMultiple(paths: ["/dir1"]))
+        assertFileStructure(fileManager, expectedFiles: [])
     }
     
     func testEmptyDirsConfig() {
@@ -225,19 +244,14 @@ final class rmtrashTests: XCTestCase {
         ]
         let fileManager = FileManagerMock(root: mockFiles)
         
-        // Test emptyDirs config
-        let emptyDirsConfig = Trash.Config(
-            interactiveMode: .never,
-            force: true,
-            recursive: false,
-            emptyDirs: true,
-            preserveRoot: true,
-            oneFileSystem: false,
-            verbose: false
-        )
-        let trashEmptyDirs = Trash(config: emptyDirsConfig, fileManager: fileManager)
-        XCTAssertTrue(trashEmptyDirs.removeMultiple(paths: ["/emptyDir"]))
-        XCTAssertFalse(trashEmptyDirs.removeMultiple(paths: ["/nonEmptyDir"]))
+        let trash = makeTrash(emptyDirs: true, fileManager: fileManager)
+        XCTAssertTrue(trash.removeMultiple(paths: ["/emptyDir"]))
+        assertFileStructure(fileManager, expectedFiles: [
+            .directory(name: "nonEmptyDir", sub: [
+                .file(name: "file.txt")
+            ])
+        ])
+        XCTAssertFalse(trash.removeMultiple(paths: ["/nonEmptyDir"]))
     }
     
     func testPreserveRootConfig() {
@@ -246,40 +260,84 @@ final class rmtrashTests: XCTestCase {
         ]
         let fileManager = FileManagerMock(root: mockFiles)
         
-        // Test preserveRoot config
-        let preserveRootConfig = Trash.Config(
-            interactiveMode: .never,
-            force: true,
+        // Test preserveRoot enabled
+        let preserveRootTrash = makeTrash(
             recursive: true,
             emptyDirs: true,
-            preserveRoot: true,
-            oneFileSystem: false,
-            verbose: false
+            fileManager: fileManager
         )
-        let trashPreserveRoot = Trash(config: preserveRootConfig, fileManager: fileManager)
+        XCTAssertFalse(preserveRootTrash.removeMultiple(paths: ["/"]))
+        XCTAssertTrue(preserveRootTrash.removeMultiple(paths: ["/testdir"]))
         
-        // Root directory should not be removable when preserveRoot is true
-        XCTAssertFalse(trashPreserveRoot.removeMultiple(paths: ["/"]))
-        
-        // Test non-root paths should still work
-        XCTAssertTrue(trashPreserveRoot.removeMultiple(paths: ["/testdir"]))
-        
-        // Test with preserveRoot disabled
-        let nonPreserveRootConfig = Trash.Config(
-            interactiveMode: .never,
-            force: true,
+        // Test preserveRoot disabled
+        let nonPreserveRootTrash = makeTrash(
             recursive: true,
             emptyDirs: true,
             preserveRoot: false,
-            oneFileSystem: false,
-            verbose: false
+            fileManager: fileManager
         )
-        let trashNonPreserveRoot = Trash(config: nonPreserveRootConfig, fileManager: fileManager)
-        XCTAssertTrue(trashNonPreserveRoot.removeMultiple(paths: ["/"]))
+        XCTAssertTrue(nonPreserveRootTrash.removeMultiple(paths: ["/"]))
+    }
+    
+    func testInteractiveModeOnce() {
+        let mockFiles: [FileMock] = [
+            .file(name: "test1.txt"),
+            .file(name: "test2.txt")
+        ]
+        
+        // Test with yes answer
+        let yesFileManager = FileManagerMock(root: mockFiles)
+        let yesTrash = makeTrash(
+            interactiveMode: .once,
+            force: false,
+            fileManager: yesFileManager,
+            question: AlwaysSomeAnswer(value: true)
+        )
+        XCTAssertTrue(yesTrash.removeMultiple(paths: ["/test1.txt", "/test2.txt"]))
+        assertFileStructure(yesFileManager, expectedFiles: [])
+        
+        // Test with no answer
+        let noFileManager = FileManagerMock(root: mockFiles)
+        let noTrash = makeTrash(
+            interactiveMode: .once,
+            force: false,
+            fileManager: noFileManager,
+            question: AlwaysSomeAnswer(value: false)
+        )
+        XCTAssertTrue(noTrash.removeMultiple(paths: ["/test1.txt", "/test2.txt"]))
+        assertFileStructure(noFileManager, expectedFiles: mockFiles)
+    }
+    
+    func testInteractiveModeAlways() {
+        let mockFiles: [FileMock] = [
+            .file(name: "test1.txt"),
+            .file(name: "test2.txt")
+        ]
+        
+        // Test with yes answer
+        let yesFileManager = FileManagerMock(root: mockFiles)
+        let yesTrash = makeTrash(
+            interactiveMode: .always,
+            force: false,
+            fileManager: yesFileManager,
+            question: AlwaysSomeAnswer(value: true)
+        )
+        XCTAssertTrue(yesTrash.removeMultiple(paths: ["/test1.txt", "/test2.txt"]))
+        assertFileStructure(yesFileManager, expectedFiles: [])
+        
+        // Test with no answer
+        let noFileManager = FileManagerMock(root: mockFiles)
+        let noTrash = makeTrash(
+            interactiveMode: .always,
+            force: false,
+            fileManager: noFileManager,
+            question: AlwaysSomeAnswer(value: false)
+        )
+        XCTAssertTrue(noTrash.removeMultiple(paths: ["/test1.txt", "/test2.txt"]))
+        assertFileStructure(noFileManager, expectedFiles: mockFiles)
     }
     
     func testFileListStateAfterDeletion() {
-        // Initial file structure
         let initialFiles: [FileMock] = [
             .file(name: "test1.txt"),
             .file(name: "test2.txt"),
@@ -292,21 +350,11 @@ final class rmtrashTests: XCTestCase {
             ])
         ]
         let fileManager = FileManagerMock(root: initialFiles)
-        
-        let config = Trash.Config(
-            interactiveMode: .never,
-            force: true,
-            recursive: true,
-            emptyDirs: true,
-            preserveRoot: true,
-            oneFileSystem: false,
-            verbose: false
-        )
-        let trash = Trash(config: config, fileManager: fileManager)
+        let trash = makeTrash(recursive: true, emptyDirs: true, fileManager: fileManager)
         
         // Test single file deletion
         XCTAssertTrue(trash.removeMultiple(paths: ["/test1.txt"]))
-        let expectedAfterSingleDelete: [FileMock] = [
+        assertFileStructure(fileManager, expectedFiles: [
             .file(name: "test2.txt"),
             .directory(name: "dir1", sub: [
                 .file(name: "file1.txt"),
@@ -315,18 +363,16 @@ final class rmtrashTests: XCTestCase {
                     .file(name: "deep.txt")
                 ])
             ])
-        ]
-        XCTAssertEqual(fileManager.currentFileStructure(), expectedAfterSingleDelete)
+        ])
         
         // Test directory deletion
         XCTAssertTrue(trash.removeMultiple(paths: ["/dir1"]))
-        let expectedAfterDirDelete: [FileMock] = [
+        assertFileStructure(fileManager, expectedFiles: [
             .file(name: "test2.txt")
-        ]
-        XCTAssertEqual(fileManager.currentFileStructure(), expectedAfterDirDelete)
+        ])
         
         // Test remaining file deletion
         XCTAssertTrue(trash.removeMultiple(paths: ["/test2.txt"]))
-        XCTAssertEqual(fileManager.currentFileStructure(), [])
+        assertFileStructure(fileManager, expectedFiles: [])
     }
 }
