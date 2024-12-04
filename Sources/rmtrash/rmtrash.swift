@@ -91,18 +91,30 @@ struct Command: ParsableCommand {
 }
 
 // MARK: - FileManager
-extension FileManager {
-    func trashItem(at url: URL) throws {
+
+public protocol FileManagerType {
+    func trashItem(at url: URL) throws
+    func isDirectory(_ url: URL) throws -> Bool
+    func isEmptyDirectory(_ url: URL) -> Bool
+    func isRootDir(_ url: URL) -> Bool
+    func isCrossMountPoint(_ url: URL) throws -> Bool
+
+    func fileExists(atPath path: String) -> Bool
+    func subpaths(atPath path: String, enumerator handler: (String) -> Bool)
+}
+
+extension FileManager: FileManagerType {
+    public func trashItem(at url: URL) throws {
         Logger.verbose("rmtrash: \(url.path)")
         try trashItem(at: url, resultingItemURL: nil)
     }
 
-    func isDirectory(_ url: URL) throws -> Bool {
+    public func isDirectory(_ url: URL) throws -> Bool {
         let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey])
         return resourceValues.isDirectory == true
     }
 
-    func isEmptyDirectory(_ url: URL) -> Bool {
+    public func isEmptyDirectory(_ url: URL) -> Bool {
         guard let enumerator = enumerator(at: url, includingPropertiesForKeys: nil, options: []) else {
             return true
         }
@@ -112,40 +124,64 @@ extension FileManager {
         return true
     }
 
-    func isRootDir(_ url: URL) -> Bool {
+    public func isRootDir(_ url: URL) -> Bool {
         return url.standardizedFileURL.path == "/"
     }
 
-    func isCrossMountPoint(_ url: URL) throws -> Bool {
+    public func isCrossMountPoint(_ url: URL) throws -> Bool {
         let cur = URL(fileURLWithPath: currentDirectoryPath)
         let curVol = try cur.resourceValues(forKeys: [URLResourceKey.volumeURLKey])
         let urlVol = try url.resourceValues(forKeys: [URLResourceKey.volumeURLKey])
         return curVol.volume != urlVol.volume
     }
 
+    public func subpaths(atPath path: String, enumerator handler: (String) -> Bool) {
+        if #available(macOS 10.15, *) {
+            if  let enumerator = enumerator(at: URL(fileURLWithPath: path),
+                                                        includingPropertiesForKeys: [],
+                                                        options: [.skipsSubdirectoryDescendants, .producesRelativePathURLs]) {
+                for case let fileURL as URL in enumerator {
+                    let subPath = URL(fileURLWithPath: path).appendingPathComponent(fileURL.relativePath).relativePath
+                    if !handler(subPath) {
+                        break
+                    }
+                }
+            }
+        } else {
+            if let subs = try? self.contentsOfDirectory(atPath: path) {
+                for sub in subs {
+                    let subPath = URL(fileURLWithPath: path).appendingPathComponent(sub).relativePath
+                    if !handler(subPath) {
+                        break
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 // MARK: - Logger
-struct Logger {
-    enum Level: Int {
+public struct Logger {
+    public enum Level: Int {
         case verbose = 0
         case error = 1
     }
 
-    static var level: Level = .error
+    public static var level: Level = .error
 
-    struct StdError: TextOutputStream {
-        mutating func write(_ string: String) {
+    public struct StdError: TextOutputStream {
+        public mutating func write(_ string: String) {
             fputs(string, stderr)
         }
     }
 
-    static func verbose(_ message: String) {
+    public static func verbose(_ message: String) {
         guard level.rawValue <= Level.verbose.rawValue else { return }
         print(message)
     }
 
-    static func error(_ message: String) {
+    public static func error(_ message: String) {
         guard level.rawValue <= Level.error.rawValue else { return }
         var stdError = StdError()
         print(message, to: &stdError)
@@ -153,45 +189,67 @@ struct Logger {
 }
 
 // MARK: - Error
-struct Panic: Error, CustomDebugStringConvertible {
-    let message: String
-    var localizedDescription: String { message }
-    var debugDescription: String { message }
-    init(_ message: String) {
+public struct Panic: Error, CustomDebugStringConvertible {
+    public let message: String
+    public var localizedDescription: String { message }
+    public var debugDescription: String { message }
+    public init(_ message: String) {
         self.message = message
     }
 }
 
-// MARK: - Trash
-struct Trash {
+// MARK: - Question
+public protocol Question {
+    func ask(_ message: String) -> Bool
+}
 
-    struct Config: Codable {
-        enum InteractiveMode: String, ExpressibleByArgument, Codable {
+public struct CommandLineQuestion: Question {
+    public init() {}
+
+    public func ask(_ message: String) -> Bool {
+        print("\(message) (y/n) ", terminator: "")
+        let answer = readLine()
+        return answer?.lowercased() == "y" || answer?.lowercased() == "yes"
+    }
+}
+
+// MARK: - Trash
+public struct Trash {
+
+    public struct Config: Codable {
+        public enum InteractiveMode: String, ExpressibleByArgument, Codable {
             case always
             case once
             case never
         }
 
-        var interactiveMode: InteractiveMode
-        var force: Bool
-        var recursive: Bool
-        var emptyDirs: Bool
-        var preserveRoot: Bool
-        var oneFileSystem: Bool
-        var verbose: Bool
+        public var interactiveMode: InteractiveMode
+        public var force: Bool
+        public var recursive: Bool
+        public var emptyDirs: Bool
+        public var preserveRoot: Bool
+        public var oneFileSystem: Bool
+        public var verbose: Bool
+
+        public init(interactiveMode: InteractiveMode, force: Bool, recursive: Bool, emptyDirs: Bool, preserveRoot: Bool, oneFileSystem: Bool, verbose: Bool) {
+            self.interactiveMode = interactiveMode
+            self.force = force
+            self.recursive = recursive
+            self.emptyDirs = emptyDirs
+            self.preserveRoot = preserveRoot
+            self.oneFileSystem = oneFileSystem
+            self.verbose = verbose
+        }
     }
 
-    let config: Config
-    let fileManager = FileManager.default
+    public let config: Config
+    public let question: Question
+    public let fileManager: FileManagerType
 
-    init(config: Config) {
+    public init(config: Config, question: Question = CommandLineQuestion(), fileManager: FileManagerType = FileManager.default) {
         self.config = config
-    }
-
-    private func question(_ message: String) -> Bool {
-        print("\(message) (y/n) ", terminator: "")
-        let answer = readLine()
-        return answer?.lowercased() == "y" || answer?.lowercased() == "yes"
+        self.question = question
+        self.fileManager = fileManager
     }
 
     private func canNotRemovePanic(path: String, err: String) -> Panic {
@@ -203,7 +261,7 @@ struct Trash {
 // MARK: Remove handling
 extension Trash {
 
-    func removeMultiple(paths: [String]) -> Bool {
+    public func removeMultiple(paths: [String]) -> Bool {
         guard paths.count > 0 else {
             return true
         }
@@ -228,7 +286,7 @@ extension Trash {
             case (.always, true):
                 removeDirectory(path)
             case (.always, false):
-                if question("remove file \(path)?") {
+                if question.ask("remove file \(path)?") {
                     try fileManager.trashItem(at: url)
                 }
             case (.never, _), (.once, _):
@@ -250,41 +308,28 @@ extension Trash {
             removeEmptyDirectory(path)
             return
         }
-        guard question("descend into directory: '\(path)'?") else {
+        guard question.ask("descend into directory: '\(path)'?") else {
             return
         }
 
-        if #available(macOS 10.15, *) {
-            if  let enumerator = fileManager.enumerator(at: URL(fileURLWithPath: path),
-                                                        includingPropertiesForKeys: [],
-                                                        options: [.skipsSubdirectoryDescendants, .producesRelativePathURLs]) {
-                for case let fileURL as URL in enumerator {
-                    let subPath = URL(fileURLWithPath: path).appendingPathComponent(fileURL.relativePath).relativePath
-                    removeOne(path: subPath)
-                }
-            }
-        } else {
-            if let subs = try? fileManager.contentsOfDirectory(atPath: path) {
-                for sub in subs {
-                    let subPath = URL(fileURLWithPath: path).appendingPathComponent(sub).relativePath
-                    removeOne(path: subPath)
-                }
-            }
-        }
+        // remove all files or directories in the directory
+        fileManager.subpaths(atPath: path, enumerator: { subPath in
+            self.removeOne(path: subPath)
+        })
 
         // try to remove the directory after all files in it are removed
         removeEmptyDirectory(path)
     }
 
     private func removeEmptyDirectory(_ path: String) {
-        guard question("remove directory '\(path)'?") else {
+        guard question.ask("remove directory '\(path)'?") else {
             return
         }
         var conf = config
         conf.recursive = false          // no recursive anymore
         conf.emptyDirs = true           // but can remove empty directories
         conf.interactiveMode = .never   // and no interactive mode, because did interactive before
-        Trash(config: conf).removeOne(path: path)
+        Trash(config: conf, question: question, fileManager: fileManager).removeOne(path: path)
     }
 }
 
@@ -305,11 +350,11 @@ extension Trash {
         let fileWord = fileCount == 1 ? "file" : "files"
         switch (dirs.count > 0, fileCount > 0) {
         case (true, false):
-            return question("recursively remove \(dirs.count) \(dirWord)?")
+            return question.ask("recursively remove \(dirs.count) \(dirWord)?")
         case (false, true):
-            return fileCount <= 3 || question("remove \(fileCount) \(fileWord)?")
+            return fileCount <= 3 || question.ask("remove \(fileCount) \(fileWord)?")
         case (true, true):
-            return question("recursively remove \(dirs.count) \(dirWord) and \(fileCount) \(fileWord)?")
+            return question.ask("recursively remove \(dirs.count) \(dirWord) and \(fileCount) \(fileWord)?")
         case (false, false):
             return true
         }
