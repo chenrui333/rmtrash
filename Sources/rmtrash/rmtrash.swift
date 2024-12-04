@@ -52,17 +52,21 @@ struct Command: ParsableCommand {
             print(Command.configuration.version)
             return
         }
-        let args = try parseArgs()
-        Logger.level = args.verbose ? .verbose : .error
-        Logger.verbose("Arguments: \(args)")
-        if !Trash(config: args).removeMultiple(paths: paths) {
-            Command.exit(withError: ExitCode.failure)
+        do {
+            let args = try parseArgs()
+            Logger.level = args.verbose ? .verbose : .error
+            Logger.verbose("Arguments: \(args)")
+            if !Trash(config: args).removeMultiple(paths: paths) {
+                Command.exit(withError: ExitCode.failure)
+            }
+        } catch {
+            Logger.error("rmtrash: \(error.localizedDescription)")
         }
     }
 
     func parseArgs() throws -> Trash.Config {
         if paths.isEmpty {
-            throw Panic("rmtrash: missing operand\nTry 'rmtrash --help' for more information.")
+            throw Panic("missing operand\nTry 'rmtrash --help' for more information.")
         }
         var interactiveMode = Trash.Config.InteractiveMode(rawValue: ProcessInfo.processInfo.environment["RMTRASH_INTERACTIVE_MODE"] ?? "never") ?? .never
         if force {
@@ -75,7 +79,7 @@ struct Command: ParsableCommand {
             if let mode = Trash.Config.InteractiveMode(rawValue: interactive) {
                 interactiveMode = mode
             } else {
-                throw Panic("rmtrash: invalid argument for --interactive: \(interactive)nTry 'rmtrash --help' for more information.")
+                throw Panic("invalid argument for --interactive: \(interactive)\nTry 'rmtrash --help' for more information.")
             }
         }
         return Trash.Config(
@@ -189,10 +193,11 @@ public struct Logger {
 }
 
 // MARK: - Error
-public struct Panic: Error, CustomDebugStringConvertible {
+public struct Panic: Error, CustomDebugStringConvertible, LocalizedError {
     public let message: String
     public var localizedDescription: String { message }
     public var debugDescription: String { message }
+    public var errorDescription: String? { message }
     public init(_ message: String) {
         self.message = message
     }
@@ -253,7 +258,7 @@ public struct Trash {
     }
 
     private func canNotRemovePanic(path: String, err: String) -> Panic {
-        return Panic("rmtrash: cannot remove '\(path)': \(err)")
+        return Panic("cannot remove '\(path)': \(err)")
     }
 
 }
@@ -293,10 +298,10 @@ extension Trash {
                 try fileManager.trashItem(at: url)
             }
             return true
-        } catch let error as Panic {
-            Logger.error(error.message)
         } catch {
-            Logger.error("rmtrash: \(error.localizedDescription)")
+            if config.verbose || !config.force { // force will ignore the error
+                Logger.error("rmtrash: \(error.localizedDescription)")
+            }
         }
         return false
     }
