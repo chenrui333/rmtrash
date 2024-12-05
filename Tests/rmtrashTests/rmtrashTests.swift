@@ -4,14 +4,14 @@ import XCTest
 enum FileMock: Equatable {
     case file(name: String)
     case directory(name: String, sub: [FileMock])
-    
+
     var name: String {
         switch self {
         case .file(let name): return name
         case .directory(let name, _): return name
         }
     }
-    
+
     var isDirectory: Bool {
         switch self {
         case .file: return false
@@ -22,17 +22,17 @@ enum FileMock: Equatable {
 
 class FileManagerMock: FileManagerType {
     private var root: [FileMock]
-    
+
     init(root: [FileMock]) {
         self.root = root
     }
-    
+
     private func findFile(components: [String], in files: [FileMock]) -> FileMock? {
         // Special case for root directory
         if components.isEmpty || (components.count == 1 && components[0].isEmpty) {
             return .directory(name: "", sub: files)
         }
-        
+
         guard let first = components.first else { return nil }
         for file in files {
             if file.name == first {
@@ -50,10 +50,10 @@ class FileManagerMock: FileManagerType {
         }
         return nil
     }
-    
+
     private func removeFile(components: [String], from files: inout [FileMock]) -> Bool {
         guard let first = components.first else { return false }
-        
+
         if components.count == 1 {
             // Remove the file directly from current directory
             if let index = files.firstIndex(where: { $0.name == first }) {
@@ -62,7 +62,7 @@ class FileManagerMock: FileManagerType {
             }
             return false
         }
-        
+
         // Navigate to subdirectory
         for i in 0..<files.count {
             if files[i].name == first {
@@ -76,7 +76,7 @@ class FileManagerMock: FileManagerType {
         }
         return false
     }
-    
+
     func trashItem(at url: URL) throws {
         let components = url.pathComponents.filter { $0 != "/" }
         if components.isEmpty {
@@ -85,7 +85,7 @@ class FileManagerMock: FileManagerType {
             throw Panic("File not found")
         }
     }
-    
+
     func isDirectory(_ url: URL) throws -> Bool {
         let components = url.pathComponents.filter { $0 != "/" }
         guard let file = findFile(components: components, in: root) else {
@@ -93,7 +93,7 @@ class FileManagerMock: FileManagerType {
         }
         return file.isDirectory
     }
-    
+
     func isEmptyDirectory(_ url: URL) -> Bool {
         let components = url.pathComponents.filter { $0 != "/" }
         guard let file = findFile(components: components, in: root) else {
@@ -104,28 +104,28 @@ class FileManagerMock: FileManagerType {
         }
         return false
     }
-    
+
     func isRootDir(_ url: URL) -> Bool {
         // Match real FileManager implementation which uses standardizedFileURL
         return url.standardizedFileURL.path == "/"
     }
-    
+
     func isCrossMountPoint(_ url: URL) throws -> Bool {
         // For mock purposes, we'll always return false
         return false
     }
-    
+
     func fileExists(atPath path: String) -> Bool {
         let components = path.split(separator: "/").map(String.init)
         return findFile(components: components, in: root) != nil
     }
-    
+
     func subpaths(atPath path: String, enumerator handler: (String) -> Bool) {
         let components = path.split(separator: "/").map(String.init)
         guard let file = findFile(components: components, in: root) else {
             return
         }
-        
+
         func enumerate(file: FileMock, currentPath: String) {
             switch file {
             case .directory(_, let sub):
@@ -141,12 +141,12 @@ class FileManagerMock: FileManagerType {
                 break
             }
         }
-        
+
         if case .directory = file {
             enumerate(file: file, currentPath: "")
         }
     }
-    
+
     func currentFileStructure() -> [FileMock] {
         return root
     }
@@ -160,7 +160,7 @@ struct StaticAnswer: Question {
 }
 
 final class RmTrashTests: XCTestCase {
-    
+
     func testForceConfig() {
         let mockFiles: [FileMock] = [
             .file(name: "test.txt"),
@@ -169,7 +169,7 @@ final class RmTrashTests: XCTestCase {
             ])
         ]
         let fileManager = FileManagerMock(root: mockFiles)
-        
+
         let trash = makeTrash(force: true, fileManager: fileManager)
         XCTAssertTrue(trash.removeMultiple(paths: ["/test.txt"]))
         assertFileStructure(fileManager, expectedFiles: [
@@ -178,7 +178,7 @@ final class RmTrashTests: XCTestCase {
             ])
         ])
     }
-    
+
     func testRecursiveConfig() {
         let mockFiles: [FileMock] = [
             .directory(name: "dir1", sub: [
@@ -189,18 +189,18 @@ final class RmTrashTests: XCTestCase {
             ])
         ]
         let fileManager = FileManagerMock(root: mockFiles)
-        
+
         // Test non-recursive config
         let nonRecursiveTrash = makeTrash(fileManager: fileManager)
         XCTAssertFalse(nonRecursiveTrash.removeMultiple(paths: ["/dir1"]))
         assertFileStructure(fileManager, expectedFiles: mockFiles)
-        
+
         // Test recursive config
         let recursiveTrash = makeTrash(recursive: true, fileManager: fileManager)
         XCTAssertTrue(recursiveTrash.removeMultiple(paths: ["/dir1"]))
         assertFileStructure(fileManager, expectedFiles: [])
     }
-    
+
     func testEmptyDirsConfig() {
         let mockFiles: [FileMock] = [
             .directory(name: "emptyDir", sub: []),
@@ -209,7 +209,7 @@ final class RmTrashTests: XCTestCase {
             ])
         ]
         let fileManager = FileManagerMock(root: mockFiles)
-        
+
         let trash = makeTrash(emptyDirs: true, fileManager: fileManager)
         XCTAssertTrue(trash.removeMultiple(paths: ["/emptyDir"]))
         assertFileStructure(fileManager, expectedFiles: [
@@ -219,13 +219,13 @@ final class RmTrashTests: XCTestCase {
         ])
         XCTAssertFalse(trash.removeMultiple(paths: ["/nonEmptyDir"]))
     }
-    
+
     func testPreserveRootConfig() {
         let mockFiles: [FileMock] = [
             .directory(name: "testdir", sub: [])
         ]
         let fileManager = FileManagerMock(root: mockFiles)
-        
+
         // Test preserveRoot enabled
         let preserveRootTrash = makeTrash(
             recursive: true,
@@ -234,7 +234,7 @@ final class RmTrashTests: XCTestCase {
         )
         XCTAssertFalse(preserveRootTrash.removeMultiple(paths: ["/"]))
         XCTAssertTrue(preserveRootTrash.removeMultiple(paths: ["/testdir"]))
-        
+
         // Test preserveRoot disabled
         let nonPreserveRootTrash = makeTrash(
             recursive: true,
@@ -244,13 +244,13 @@ final class RmTrashTests: XCTestCase {
         )
         XCTAssertTrue(nonPreserveRootTrash.removeMultiple(paths: ["/"]))
     }
-    
+
     func testInteractiveModeOnce() {
         let mockFiles: [FileMock] = [
             .file(name: "test1.txt"),
             .directory(name: "dir1", sub: [])
         ]
-        
+
         // Test with yes answer
         let yesFileManager = FileManagerMock(root: mockFiles)
         let yesTrash = makeTrash(
@@ -262,7 +262,7 @@ final class RmTrashTests: XCTestCase {
         )
         XCTAssertTrue(yesTrash.removeMultiple(paths: ["/test1.txt", "/dir1"]))
         assertFileStructure(yesFileManager, expectedFiles: [])
-        
+
         // Test with no answer
         let noFileManager = FileManagerMock(root: mockFiles)
         let noTrash = makeTrash(
@@ -275,13 +275,13 @@ final class RmTrashTests: XCTestCase {
         XCTAssertTrue(noTrash.removeMultiple(paths: ["/test1.txt", "/dir1"]))
         assertFileStructure(noFileManager, expectedFiles: mockFiles)
     }
-    
+
     func testInteractiveModeAlways() {
         let mockFiles: [FileMock] = [
             .file(name: "test1.txt"),
             .file(name: "test2.txt")
         ]
-        
+
         // Test with yes answer
         let yesFileManager = FileManagerMock(root: mockFiles)
         let yesTrash = makeTrash(
@@ -292,7 +292,7 @@ final class RmTrashTests: XCTestCase {
         )
         XCTAssertTrue(yesTrash.removeMultiple(paths: ["/test1.txt", "/test2.txt"]))
         assertFileStructure(yesFileManager, expectedFiles: [])
-        
+
         // Test with no answer
         let noFileManager = FileManagerMock(root: mockFiles)
         let noTrash = makeTrash(
@@ -304,7 +304,7 @@ final class RmTrashTests: XCTestCase {
         XCTAssertTrue(noTrash.removeMultiple(paths: ["/test1.txt", "/test2.txt"]))
         assertFileStructure(noFileManager, expectedFiles: mockFiles)
     }
-    
+
     func testFileListStateAfterDeletion() {
         let initialFiles: [FileMock] = [
             .file(name: "test1.txt"),
@@ -319,7 +319,7 @@ final class RmTrashTests: XCTestCase {
         ]
         let fileManager = FileManagerMock(root: initialFiles)
         let trash = makeTrash(recursive: true, emptyDirs: true, fileManager: fileManager)
-        
+
         // Test single file deletion
         XCTAssertTrue(trash.removeMultiple(paths: ["/test1.txt"]))
         assertFileStructure(fileManager, expectedFiles: [
@@ -332,22 +332,21 @@ final class RmTrashTests: XCTestCase {
                 ])
             ])
         ])
-        
+
         // Test directory deletion
         XCTAssertTrue(trash.removeMultiple(paths: ["/dir1"]))
         assertFileStructure(fileManager, expectedFiles: [
             .file(name: "test2.txt")
         ])
-        
+
         // Test remaining file deletion
         XCTAssertTrue(trash.removeMultiple(paths: ["/test2.txt"]))
         assertFileStructure(fileManager, expectedFiles: [])
     }
 }
 
-
 extension RmTrashTests {
-    
+
     func makeTrash(
         interactiveMode: Trash.Config.InteractiveMode = .never,
         force: Bool = true,
@@ -374,7 +373,7 @@ extension RmTrashTests {
             fileManager: fileManager ?? FileManagerMock(root: [])
         )
     }
-    
+
     func assertFileStructure(_ fileManager: FileManagerMock, expectedFiles: [FileMock], file: StaticString = #file, line: UInt = #line) {
         XCTAssertEqual(fileManager.currentFileStructure(), expectedFiles, file: file, line: line)
     }

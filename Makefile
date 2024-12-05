@@ -47,7 +47,8 @@ install: build
 
 .PHONY: style
 style:
-	swiftlint --autocorrect Sources
+	swiftlint --autocorrect Sources/*
+	swiftlint --autocorrect Tests/*
 	swiftlint --autocorrect Package.swift
 
 .PHONY: clean
