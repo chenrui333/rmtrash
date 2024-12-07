@@ -34,11 +34,14 @@ build-universal:
 	lipo -create .build/x86_64-apple-macosx/release/$(bin) .build/arm64-apple-macosx/release/$(bin) -output .build/release/$(bin)
 
 .PHONY: release
-release: test build-universal
+release: test build-universal manual
 	mkdir -p .dist
-	tar -czf .dist/$(bin)_$(version)_x86_64.tar.gz -C .build/x86_64-apple-macosx/release $(bin)
-	tar -czf .dist/$(bin)_$(version)_arm64.tar.gz -C .build/arm64-apple-macosx/release $(bin)
-	tar -czf .dist/$(bin)_$(version)_universal.tar.gz -C .build/release $(bin)
+	cp .build/plugins/GenerateManual/outputs/rmtrash/rmtrash.1 .build/x86_64-apple-macosx/release
+	cp .build/plugins/GenerateManual/outputs/rmtrash/rmtrash.1 .build/arm64-apple-macosx/release
+	cp .build/plugins/GenerateManual/outputs/rmtrash/rmtrash.1 .build/release
+	tar -czf .dist/$(bin)_$(version)_x86_64.tar.gz -C .build/x86_64-apple-macosx/release $(bin) $(bin).1
+	tar -czf .dist/$(bin)_$(version)_arm64.tar.gz -C .build/arm64-apple-macosx/release $(bin) $(bin).1
+	tar -czf .dist/$(bin)_$(version)_universal.tar.gz -C .build/release $(bin) $(bin).1
 
 .PHONY: install
 install: build
