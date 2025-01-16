@@ -1,0 +1,21 @@
+name: swift
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build_and_test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Dependencies
+        run: swift package resolve
+      - name: Build
+        run: swift build --configuration release
+      - name: Test
+        run: swift test
